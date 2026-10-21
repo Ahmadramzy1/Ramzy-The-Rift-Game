@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import {GameScene} from '../src/game/GameScene';
 import {settings,touch} from '../src/game/bridge';
+import {loadCampaign,awardCoin,buyBoost} from '../src/game/campaign';
+import {command} from '../src/game/bridge';
 import {STAGES} from '../src/game/levels';
 const scene=new GameScene();settings.sound=false;
 const game=new Phaser.Game({type:Phaser.CANVAS,parent:'game',width:1920,height:1080,scene:[scene],physics:{default:'arcade',arcade:{gravity:{x:0,y:1500},fps:60,fixedStep:true}},audio:{noAudio:true},pixelArt:true});
@@ -14,15 +16,19 @@ async function fresh(id=0){release();scene.loadStage(id);scene.startPlay();await
 document.getElementById('run')!.onclick=async()=>{
  (document.getElementById('run') as HTMLButtonElement).disabled=true;output.textContent='Running against actual Phaser 3 Arcade physics...';
  let passed=0;
- const test=async(name:string,fn:()=>Promise<void>)=>{try{await fn();passed++;report('PASS '+name);}catch(e){report('FAIL '+name+' — '+String(e));throw e;}};
+ const test=async(name:string,fn:()=>Promise<void>)=>{if(new URLSearchParams(location.search).has('dungeonOnly')&&!/dungeon|wallet|collectibles/.test(name))return;try{await fn();passed++;report('PASS '+name);}catch(e){report('FAIL '+name+' — '+String(e));throw e;}};
  try{
   await test('ground, acceleration and feet-preserving crouch',async()=>{
    await fresh();const b=scene.player.body as Phaser.Physics.Arcade.Body;assert(b.blocked.down,'spawn must stand on ground');
    touch.right=true;await frames(24);touch.right=false;assert(b.velocity.x>190,'accelerates to walking speed');await frames(12);
    const feet=b.bottom;touch.crouch=true;await frames(4);assert(b.height===32,'crouch reduces collider');assert(Math.abs(b.bottom-feet)<2,'crouch keeps feet fixed');touch.crouch=false;await frames(4);assert(b.height===60,'stand restores collider');
   });
-  await test('double jump; no third jump',async()=>{
-   await fresh();touch.jump=true;await frames(3);assert(scene.jumpsUsed===1,'first jump');touch.jump=false;await frames(10);touch.jump=true;await frames(3);assert(scene.jumpsUsed===2,'air jump');touch.jump=false;await frames(3);touch.jump=true;await frames(3);assert(scene.jumpsUsed===2,'third jump blocked');assert(scene.player.body!.velocity.y>-505,'third jump must not reset vertical velocity');release();
+  await test('ground-only jump: air jump and walking-off-edge rescue are blocked',async()=>{
+   await fresh();touch.jump=true;await frames(3);assert(scene.jumpsUsed===1,'ground jump');touch.jump=false;await frames(10);const velocity=scene.player.body!.velocity.y;touch.jump=true;await frames(3);assert(scene.jumpsUsed===1,'no air jump');assert(scene.player.body!.velocity.y>velocity,'air press does not launch');release();
+   await fresh();scene.player.setPosition(665,425);scene.player.setVelocity(0,130);await frames(2);touch.jump=true;await frames(3);assert(scene.player.body!.velocity.y>0,'gap has no support: must fall');release();
+  });
+  await test('solid ceiling tops also support a grounded jump',async()=>{
+   await fresh(3);const ceiling=scene.stageData.ceilings[0];scene.player.setPosition(ceiling.x+ceiling.w/2,ceiling.y-48);scene.player.setVelocity(0);await frames(5);assert((scene.player.body as Phaser.Physics.Arcade.Body).blocked.down,'ceiling top is solid ground');touch.jump=true;await frames(3);assert(scene.player.body!.velocity.y<0,'can jump from the top of a ceiling');release();
   });
   await test('slingshot projectile reduces HP and kills after two hits',async()=>{
    await fresh();scene.player.setPosition(330,scene.groundY(330)-48);await frames(4);const e=scene.enemies[0];scene.fire(e.sprite.x,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(55);assert(e.hp===1,'first shot should leave 1 HP, actual '+e.hp);scene.fire(e.sprite.x,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(55);assert(e.hp===0&&!e.sprite.active,'second shot kills');
@@ -60,6 +66,20 @@ document.getElementById('run')!.onclick=async()=>{
    }
    scene.player.setPosition(3195,410);scene.player.setVelocity(0);await frames(5);assert(scene.status==='complete','portal completes stage');
   });
-  report('RESULT: '+passed+'/10 engine checks passed.');document.title='PASS '+passed+'/10 — RAMZY';
+  await test('all ten dungeon doors enter with down and return without losing the run',async()=>{
+   for(let i=0;i<10;i++){await fresh(i);const x=scene.stageData.dungeonX;scene.player.setPosition(x,scene.groundY(x)-48);scene.player.setVelocity(0);await frames(5);touch.crouch=true;await frames(3);assert(scene.area==='dungeon','stage '+(i+1)+' door enters');assert(scene.enemies.length>STAGES[i].enemies.length,'dungeon has more enemies');release();await frames(3);scene.player.setPosition(80,410);scene.player.setVelocity(0);await frames(5);touch.crouch=true;await frames(3);assert(scene.area==='main','return door works');assert(!scene.dungeonCleared,'retreat earns no clear');release();}
+  });
+  await test('coin wallet, room re-entry and purchased damage persist correctly',async()=>{
+   await fresh();const coin=scene.stageData.coins[0],before=loadCampaign().wallet;scene.player.setPosition(coin.x,coin.y);await frames(5);assert(loadCampaign().wallet===before+1,'coin credited once');assert(scene.mainCoins.size===1,'main coin tracked');scene.enterDungeon();await frames(5);scene.leaveDungeon();await frames(5);assert(scene.state.coins===1&&scene.mainCoins.size===1,'room return retains collected coin');const balance=loadCampaign().wallet;scene.player.setPosition(coin.x,coin.y);await frames(5);assert(loadCampaign().wallet===balance,'collected coin cannot duplicate on room reload');
+   scene.player.setPosition(scene.stageData.power.x,scene.stageData.power.y);await frames(5);assert(scene.state.big,'energy collected');scene.state.big=false;scene.enterDungeon();await frames(5);scene.leaveDungeon();await frames(5);scene.player.setPosition(scene.stageData.power.x,scene.stageData.power.y);await frames(5);assert(!scene.state.big,'room reload cannot replenish consumed energy');
+   awardCoin(100);assert(buyBoost(1,'power'),'buy power');assert(buyBoost(1,'energy'),'buy energy');command('stage',0);await frames(5);assert(scene.activeBoosts.power&&scene.state.big,'purchased boosts applied to stage');scene.die();scene.respawn();await frames(4);assert(scene.activeBoosts.power,'damage boost survives death');scene.equip('slingshot');const e=scene.enemies[0];scene.player.setPosition(e.sprite.x-90,scene.groundY(e.sprite.x)-48);await frames(3);scene.fire(e.sprite.x,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(15);assert(e.hp===0,'boosted sling deals exactly 2 HP');scene.activeBoosts={energy:false,power:false};
+  });
+  await test('dungeon gate stays locked then clear + main gate earns three stars',async()=>{
+   await fresh(2);scene.enterDungeon();await frames(5);scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(4);assert(scene.area==='dungeon','living enemies lock gate');for(const e of scene.enemies)scene.killEnemy(e);await frames(4);assert(scene.area==='main'&&scene.dungeonCleared,'all enemies plus gate returns with clear');scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(5);assert(scene.status==='complete','main gate completes');assert(loadCampaign().stars[3]===3,'three stars recorded');
+  });
+  await test('all main collectibles plus exit awards two stars',async()=>{
+   await fresh(1);scene.stageData.coins.forEach((_,i)=>scene.mainCoins.add(i));scene.stageData.tapes.forEach((_,i)=>scene.mainRadios.add(i));scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(5);assert(loadCampaign().stars[2]===2,'all coins/radios require stage exit and award two');
+  });
+  const expected=new URLSearchParams(location.search).has('dungeonOnly')?4:15;report('RESULT: '+passed+'/'+expected+' engine checks passed.');document.title='PASS '+passed+'/'+expected+' — RAMZY';
  }catch(e){release();scene.pause();report('RESULT: stopped after '+passed+' passed. '+String(e));document.title='FAIL — Signal 86';}
 };

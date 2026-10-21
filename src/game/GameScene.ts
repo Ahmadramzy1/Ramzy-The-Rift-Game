@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
-import { STAGES, type Stage, type EnemyKind } from './levels';
-import { PHYSICS, advanceVelocity, cutJump, canJump, isStomp, takeHit, checkpointRespawn, initialState, type PlayerState } from './mechanics';
+import { STAGES, DUNGEONS, type Stage, type EnemyKind } from './levels';
+import { PHYSICS, advanceVelocity, cutJump, isStomp, takeHit, checkpointRespawn, initialState, type PlayerState } from './mechanics';
 import { commands, updates, touch, settings, sound, type Status } from './bridge';
 import {enemyStats,hitEnemy,shouldAggro,tryJump,crouchBox,canStand,useAbility,chooseTarget,readPad,clampChaseVelocity,blocksPageScroll} from './combat';
+import {canUseDungeonDoor,hasGroundSupport} from './dungeons';
+import {awardCoin,takeStageBoosts,recordStageResult,type StageBoosts} from './campaign';
 import {WEAPONS,meleeInRange,projectileInRange,type WeaponKind} from './weapons';
 
-type Enemy = {sprite:Phaser.Physics.Arcade.Sprite;min:number;max:number;speed:number;kind:EnemyKind;baseY:number;phase:number;hp:number;maxHp:number;invulnerableUntil:number;aggro:boolean;alertAt:number;lastAttack:number;bar:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;controlledAt:number;liftY:number};
+type Enemy = {index:number;sprite:Phaser.Physics.Arcade.Sprite;min:number;max:number;speed:number;kind:EnemyKind;baseY:number;phase:number;hp:number;maxHp:number;invulnerableUntil:number;aggro:boolean;alertAt:number;lastAttack:number;bar:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;controlledAt:number;liftY:number};
 const propKeys=['grass','stone','forest','metal','rift','floating','metal-platform','rift-platform','bush','rock','barrel','barricade','cone','log','fence','lamp','streetlamp','pole','wood-fence','tree','tower','drain','waterpipe','portal','sign','radio','tape','battery','keycard','heart','coin','mushroom','energy','medkit','key','vial'];
 
 export class GameScene extends Phaser.Scene {
@@ -19,6 +21,9 @@ export class GameScene extends Phaser.Scene {
  bullets!:Phaser.Physics.Arcade.Group;hostileShots!:Phaser.Physics.Arcade.Group;enemyGroup!:Phaser.Physics.Arcade.Group;weapon!:Phaser.GameObjects.Image;
  jumpsUsed=0;crouching=false;lastShot=-1000;abilityHeld=false;padPauseHeld=false;padConnected=false;aimAngle=0;psiBeam!:Phaser.GameObjects.Graphics;
  screenOffsetX=0;screenOffsetY=0;
+ area:'main'|'dungeon'='main';dungeonCleared=false;doorHeld=false;mainCheckpoint=110;
+ mainCoins=new Set<number>();mainRadios=new Set<number>();dungeonCoins=new Set<number>();mainKills=new Set<number>();dungeonKills=new Set<number>();consumedPickups=new Set<string>();
+ activeBoosts:StageBoosts={energy:false,power:false};
  equipped:WeaponKind='slingshot';swingStarted=-1000;meleeHitDone=true;switchHeld=false;arm!:Phaser.GameObjects.Graphics;
 
  constructor(){super('world');}
@@ -53,8 +58,8 @@ export class GameScene extends Phaser.Scene {
   this.bind('pause',()=>this.pause());
   this.bind('resume',()=>this.resume());
   this.bind('restart',()=>{this.loadStage(this.stageData.id-1);this.startPlay();});
-  this.bind('stage',(e)=>{this.loadStage(Number((e as CustomEvent).detail));this.startPlay();});
-  this.bind('menu',()=>this.loadStage(this.stageData.id-1));
+  this.bind('stage',(e)=>{const index=Number((e as CustomEvent).detail);this.activeBoosts=takeStageBoosts(index+1);this.loadStage(index);this.startPlay();});
+  this.bind('menu',()=>{this.activeBoosts={energy:false,power:false};this.loadStage(this.stageData.id-1);});
   this.game.events.on(Phaser.Core.Events.BLUR,this.onBlur,this);
   this.input.on('pointerdown',(p:Phaser.Input.Pointer)=>{if(p.leftButtonDown()&&this.status==='playing'&&!settings.menuOpen){this.game.canvas.focus({preventScroll:true});this.fire(p.worldX,p.worldY);}});
   this.events.once('shutdown',()=>{this.listeners.forEach(l=>commands.removeEventListener(l.name,l.fn));this.game.events.off(Phaser.Core.Events.BLUR,this.onBlur,this);});
@@ -62,14 +67,18 @@ export class GameScene extends Phaser.Scene {
  }
  bind(name:string,fn:EventListener){commands.addEventListener(name,fn);this.listeners.push({name,fn});}
  onBlur(){if(this.status==='playing')this.pause();}
- emitHud(){updates.dispatchEvent(new CustomEvent('hud',{detail:{...this.state,stage:this.stageData.id,progress:Math.max(0,Math.min(100,Math.round((this.player.x/this.stageData.exit)*100))),status:this.status,time:Math.floor(this.elapsed/1000),notice:this.notice,gamepad:this.padConnected,weapon:this.equipped}}));}
+ emitHud(){updates.dispatchEvent(new CustomEvent('hud',{detail:{...this.state,stage:this.stageData.id,progress:Math.max(0,Math.min(100,Math.round((this.player.x/this.stageData.exit)*100))),status:this.status,time:Math.floor(this.elapsed/1000),notice:this.notice,gamepad:this.padConnected,weapon:this.equipped,area:this.area,dungeonCleared:this.dungeonCleared,dungeonRemaining:this.enemies.filter(e=>e.sprite.active&&e.hp>0).length,totalCoins:STAGES[this.stageData.id-1].coins.length,totalRadios:STAGES[this.stageData.id-1].tapes.length}}));}
 
- loadStage(index:number){
+ loadStage(index:number,area:'main'|'dungeon'='main',preserveRun=false){
+  const previous={...this.state},previousElapsed=this.elapsed;
+  if(!preserveRun){this.mainCoins.clear();this.mainRadios.clear();this.dungeonCoins.clear();this.mainKills.clear();this.dungeonKills.clear();this.consumedPickups.clear();this.dungeonCleared=false;this.mainCheckpoint=110;}
+  this.area=area;
   this.physics.world.colliders.destroy();
   this.solids?.destroy(true,true);this.bullets?.destroy(true,true);this.hostileShots?.destroy(true,true);this.enemyGroup?.destroy(true,true);
   this.tweens.killAll();this.time.removeAllEvents();this.children.removeAll(true);
-  this.enemies=[];this.motes=[];this.stageData=STAGES[Math.max(0,Math.min(9,index))];this.state=initialState();
-  this.status='ready';this.elapsed=0;this.groundedAt=-10000;this.pressedAt=-10000;this.jumpHeld=false;this.checkpointActive=false;this.resizeBig=false;this.notice='';this.jumpsUsed=0;this.crouching=false;this.lastShot=-1000;this.abilityHeld=false;this.padPauseHeld=false;this.equipped='slingshot';this.swingStarted=-1000;this.meleeHitDone=true;
+  this.enemies=[];this.motes=[];this.stageData=(area==='dungeon'?DUNGEONS:STAGES)[Math.max(0,Math.min(9,index))];this.state=preserveRun?previous:{...initialState(),big:this.activeBoosts.energy};
+  if(preserveRun)this.state.checkpoint=area==='dungeon'?80:this.mainCheckpoint;
+  this.status='ready';this.elapsed=preserveRun?previousElapsed:0;this.groundedAt=-10000;this.pressedAt=-10000;this.jumpHeld=false;this.checkpointActive=false;this.resizeBig=false;this.notice='';this.jumpsUsed=0;this.crouching=false;this.lastShot=-1000;this.abilityHeld=false;this.padPauseHeld=false;this.equipped='slingshot';this.swingStarted=-1000;this.meleeHitDone=true;
   this.knockUntil=0;this.previousBottom=0;this.switchHeld=false;
   const stage=this.stageData;const cam=this.cameras.main;
   const renderScale=this.scale.width/960;this.screenOffsetX=(this.scale.width-960)/2;this.screenOffsetY=(this.scale.height-540)/2;
@@ -107,7 +116,10 @@ export class GameScene extends Phaser.Scene {
   }
   stage.decor.forEach(d=>this.prop(d.key,d.x,d.y,d.size,-2));
   this.prop('bush',230,458,84,3);this.prop('sign',55,458,116,-1);
-  if(stage.id===1){this.prop('streetlamp',285,458,212,-2);this.prop('drain',1490,458,125,-1);this.prop('barricade',2800,458,80,-1);}
+  if(stage.id===1&&area==='main'){this.prop('streetlamp',285,458,212,-2);this.prop('barricade',2800,458,80,-1);}
+  const doorX=area==='main'?stage.dungeonX:80;this.prop('drain',doorX,this.groundY(doorX),125,2).setTint(area==='dungeon'?0x9e84b8:0xffffff);
+  this.add.text(doorX,this.groundY(doorX)-143,area==='main'?(this.dungeonCleared?'DUNGEON CLEAR':'DUNGEON / ↓'):'RETURN / ↑ ↓',{fontFamily:'monospace',fontSize:'12px',color:'#d4b2ee',stroke:'#101020',strokeThickness:3}).setOrigin(.5).setDepth(5);
+  if(area==='dungeon'){this.sky.setTint(0x48315e).setAlpha(.45);this.fog.setTint(0x8b4da1);}
   if(stage.id>=5){this.prop('tower',200,458,210,-2);this.prop('barrel',1030,458,58,2);}
   this.checkpoint=this.prop('radio',stage.checkpoint,this.groundY(stage.checkpoint),56,3).setTint(0x96b3bd);
   const cp=this.add.zone(stage.checkpoint,this.groundY(stage.checkpoint)-42,55,84);
@@ -122,43 +134,44 @@ export class GameScene extends Phaser.Scene {
   }
   if(stage.ceilings.length)this.add.text(stage.ceilings[0].x-32,this.groundY(200)-24,'↓',{fontFamily:'monospace',fontSize:'20px',color:'#adc7c1'}).setDepth(4);
   this.physics.add.overlap(this.player,cp,()=>{
-   if(this.checkpointActive)return;
-   this.checkpointActive=true;this.state.checkpoint=stage.checkpoint;this.checkpoint.clearTint();this.pop('CHECKPOINT',stage.checkpoint,this.groundY(stage.checkpoint)-90,0x7ce4cb);
+   if(this.checkpointActive||this.area==='dungeon')return;
+   this.checkpointActive=true;this.state.checkpoint=stage.checkpoint;this.mainCheckpoint=stage.checkpoint;this.checkpoint.clearTint();this.pop('CHECKPOINT',stage.checkpoint,this.groundY(stage.checkpoint)-90,0x7ce4cb);
    this.notify('چک‌پوینت فعال شد');sound('checkpoint');this.burst(stage.checkpoint,this.checkpoint.y-30,0x7ce4cb,16);this.emitHud();
   });
-  for(const c of stage.coins)this.pickup('coin',c.x,c.y,26,()=>{this.state.coins++;this.state.score+=100;sound('coin');});
-  for(const c of stage.tapes)this.pickup('tape',c.x,c.y,39,()=>{this.state.tapes++;this.state.score+=500;this.notify('نوار گمشده پیدا شد');sound('power');});
-  this.pickup('energy',stage.power.x,stage.power.y,35,()=>{this.state.big=true;this.state.score+=300;this.notify('انرژی فعال شد — قهرمان بزرگ شد');sound('power');this.burst(this.player.x,this.player.y,0x7ce4cb,22);});
+  for(const [i,c] of stage.coins.entries())if(!(area==='main'?this.mainCoins:this.dungeonCoins).has(i))this.pickup('coin',c.x,c.y,26,()=>{(this.area==='main'?this.mainCoins:this.dungeonCoins).add(i);if(this.area==='main')this.state.coins=this.mainCoins.size;awardCoin();this.state.score+=100;sound('coin');});
+  for(const [i,c] of stage.tapes.entries())if(!this.mainRadios.has(i))this.pickup('radio',c.x,c.y,39,()=>{this.mainRadios.add(i);this.state.tapes=this.mainRadios.size;this.state.score+=500;this.notify('رادیوی گمشده پیدا شد');sound('power');});
+  if(!this.consumedPickups.has(area+'energy'))this.pickup('energy',stage.power.x,stage.power.y,35,()=>{this.consumedPickups.add(area+'energy');this.state.big=true;this.state.score+=300;this.notify('انرژی فعال شد — قهرمان بزرگ شد');sound('power');this.burst(this.player.x,this.player.y,0x7ce4cb,22);});
   // A second power-up after the checkpoint makes later mistakes recoverable.
-  this.pickup('medkit',stage.checkpoint+180,this.groundY(stage.checkpoint+180)-58,30,()=>{this.state.hearts=Math.min(3,this.state.hearts+1);sound('power');this.notify('سلامتی بازیابی شد');});
+  if(!this.consumedPickups.has(area+'medkit'))this.pickup('medkit',stage.checkpoint+180,this.groundY(stage.checkpoint+180)-58,30,()=>{this.consumedPickups.add(area+'medkit');this.state.hearts=Math.min(3,this.state.hearts+1);sound('power');this.notify('سلامتی بازیابی شد');});
   this.bullets=this.physics.add.group({allowGravity:false});this.hostileShots=this.physics.add.group({allowGravity:false});this.enemyGroup=this.physics.add.group({allowGravity:true});
   this.makeCombatTextures();
   this.weapon=this.add.image(110,370,'slingshot').setOrigin(.5,.7).setDepth(12);
   this.arm=this.add.graphics().setDepth(11);
   this.psiBeam=this.add.graphics().setDepth(14);
-  for(const e of stage.enemies){
+  for(const [enemyIndex,e] of stage.enemies.entries()){
+   if((this.area==='main'?this.mainKills:this.dungeonKills).has(enemyIndex))continue;
    const flying=e.kind==='bat';
    const enemy=this.physics.add.sprite(e.x,e.y-(flying?160:48),e.kind).setDepth(8);
    this.enemyGroup.add(enemy);enemy.setScale(flying?.69:.72).setSize(68,48).setOffset(29,56);
    const body=enemy.body as Phaser.Physics.Arcade.Body;body.setAllowGravity(!flying);
    enemy.play(e.kind);if(!flying)this.physics.add.collider(enemy,this.solids);
-   const stats=enemyStats(e.kind,stage.id);
+   const stats=enemyStats(e.kind,stage.id+(this.area==='dungeon'?5:0));
    const bar=this.add.graphics().setDepth(12);const label=this.add.text(enemy.x,enemy.y-56,stats.hp+'/'+stats.hp,{fontFamily:'monospace',fontSize:'9px',color:'#d7dfd9',stroke:'#0c1018',strokeThickness:3}).setOrigin(.5).setDepth(12);
-   this.enemies.push({sprite:enemy,min:e.min,max:e.max,speed:stats.speed,kind:e.kind,baseY:enemy.y,phase:e.x*.02,hp:stats.hp,maxHp:stats.hp,invulnerableUntil:0,aggro:false,alertAt:-10000,lastAttack:-1000,bar,label,controlledAt:-1,liftY:enemy.y});
+   this.enemies.push({index:enemyIndex,sprite:enemy,min:e.min,max:e.max,speed:stats.speed,kind:e.kind,baseY:enemy.y,phase:e.x*.02,hp:stats.hp,maxHp:stats.hp,invulnerableUntil:0,aggro:false,alertAt:-10000,lastAttack:-1000,bar,label,controlledAt:-1,liftY:enemy.y});
    this.physics.add.overlap(this.player,enemy,()=>this.encounter(enemy));
   }
   this.physics.add.collider(this.bullets,this.solids,b=>b.destroy());
   this.physics.add.collider(this.hostileShots,this.solids,b=>b.destroy());
   this.physics.add.overlap(this.bullets,this.enemyGroup,(bullet,enemy)=>{
    const e=this.enemies.find(e=>e.sprite===enemy);if(!e||e.controlledAt>=0||e.hp<=0)return;
-   bullet.destroy();this.hurtEnemy(e,WEAPONS.slingshot.damage);
+   bullet.destroy();this.hurtEnemy(e,WEAPONS.slingshot.damage*(this.activeBoosts.power?2:1));
   });
   this.physics.add.overlap(this.player,this.hostileShots,(_player,shot)=>{if(this.status!=='playing')return;const x=(shot as Phaser.Physics.Arcade.Image).x;shot.destroy();this.damage(x);});
   this.portal=this.prop('portal',stage.exit,this.groundY(stage.exit),156,6);
   const portalAura=this.add.circle(stage.exit,this.portal.y-76,48,stage.color,.12).setDepth(5);
   this.tweens.add({targets:portalAura,scale:1.35,alpha:.3,duration:1900,yoyo:true,repeat:-1});
   this.tweens.add({targets:this.portal,alpha:.78,duration:1500,yoyo:true,repeat:-1});
-  this.add.text(stage.exit-3,this.portal.y-180,'EXIT',{fontFamily:'monospace',fontSize:'13px',color:'#efbdad',letterSpacing:4}).setOrigin(.5).setDepth(6);
+  this.add.text(stage.exit-3,this.portal.y-180,area==='dungeon'?'CLEAR ALL / EXIT':'EXIT',{fontFamily:'monospace',fontSize:'13px',color:'#efbdad',letterSpacing:4}).setOrigin(.5).setDepth(6);
   for(let i=0;i<38;i++){
    const obj=this.add.rectangle((i*137)%960,(i*73)%540,i%3===0?3:2,2,i%2?0xdb6a67:0x87a1b2,.4).setScrollFactor(0).setDepth(15);
    this.motes.push({obj,speed:8+i%9,phase:i});
@@ -173,6 +186,17 @@ export class GameScene extends Phaser.Scene {
   // 1920×1080 canvas. Account for camera zoom in screen/parallax planes.
   for(const child of this.children.list){const o=child as Phaser.GameObjects.Image;if(typeof o.scrollFactorX==='number'&&typeof o.x==='number'){o.x+=this.screenOffsetX*(1-o.scrollFactorX);o.y+=this.screenOffsetY*(1-o.scrollFactorY);}}
   this.player.play('idle');this.physics.pause();this.emitHud();
+ }
+ enterDungeon(){
+  if(this.area!=='main'||this.dungeonCleared)return;
+  this.mainCheckpoint=this.state.checkpoint;this.loadStage(this.stageData.id-1,'dungeon',true);this.startPlay(false);this.doorHeld=true;this.jumpHeld=this.keys.UP.isDown||this.keys.W.isDown||this.keys.SPACE.isDown;
+  this.notify('دانجن: همهٔ دشمن‌ها را بزن؛ برای برگشت، کنار ورودی بالا یا پایین را بزن.');
+ }
+ leaveDungeon(cleared=false){
+  if(this.area!=='dungeon')return;
+  this.dungeonCleared=this.dungeonCleared||cleared;const index=this.stageData.id-1,x=STAGES[index].dungeonX;
+  this.loadStage(index,'main',true);this.player.setPosition(x+5,this.groundY(x+5)-48);this.player.setVelocity(0);this.startPlay(false);this.doorHeld=true;this.jumpHeld=this.keys.UP.isDown||this.keys.W.isDown||this.keys.SPACE.isDown;
+  this.notify(cleared?'دانجن پاک شد؛ برای ثبت سه ستاره به انتهای مرحله برس.':'بازگشت به مسیر اصلی؛ دانجن هنوز پاک نشده.');
  }
  groundY(x:number){return this.stageData.platforms.find(p=>!p.kind&&x>=p.x&&x<=p.x+p.w)?.y??458;}
  drawLandmarks(){
@@ -208,7 +232,7 @@ export class GameScene extends Phaser.Scene {
   });
  }
  notify(text:string){this.notice=text;this.noticeUntil=this.sceneTime+3200;}
- startPlay(){if(this.status==='playing')return;updates.dispatchEvent(new Event('music-restart'));this.status='playing';this.physics.resume();this.input.keyboard?.resetKeys();this.game.canvas.focus({preventScroll:true});this.emitHud();}
+ startPlay(restartMusic=true){if(this.status==='playing')return;if(restartMusic)updates.dispatchEvent(new Event('music-restart'));this.status='playing';this.physics.resume();if(restartMusic)this.input.keyboard?.resetKeys();this.game.canvas.focus({preventScroll:true});this.emitHud();}
  pause(){if(this.status!=='playing')return;this.status='paused';this.physics.pause();this.emitHud();}
  resume(){if(this.status!=='paused')return;this.status='playing';this.physics.resume();this.input.keyboard?.resetKeys();this.game.canvas.focus({preventScroll:true});this.emitHud();}
  burst(x:number,y:number,color:number,count:number){
@@ -243,6 +267,7 @@ export class GameScene extends Phaser.Scene {
  }
  killEnemy(enemy:Enemy){
   if(!enemy.sprite.active)return;
+  (this.area==='main'?this.mainKills:this.dungeonKills).add(enemy.index);
   enemy.hp=0;enemy.sprite.disableBody(true,true);enemy.bar.clear();enemy.label.setVisible(false);
   this.state.score+=200+enemy.maxHp*50;this.pop('+'+(200+enemy.maxHp*50),enemy.sprite.x,enemy.sprite.y-30);this.burst(enemy.sprite.x,enemy.sprite.y,0xe4886b,18);this.emitHud();
  }
@@ -262,7 +287,7 @@ export class GameScene extends Phaser.Scene {
    if(t>=1.3){this.burst(e.sprite.x,e.sprite.y,0xb998f1,34);this.killEnemy(e);sound('psi');}
   }else{
    const eb=e.sprite.body as Phaser.Physics.Arcade.Body,pb=this.player.body as Phaser.Physics.Arcade.Body;
-   const dx=this.player.x-e.sprite.x,dy=pb.center.y-eb.center.y,stats=enemyStats(e.kind,this.stageData.id);
+   const dx=this.player.x-e.sprite.x,dy=pb.center.y-eb.center.y,stats=enemyStats(e.kind,this.stageData.id+(this.area==='dungeon'?5:0));
    const line=new Phaser.Geom.Line(e.sprite.x,eb.center.y,this.player.x,pb.center.y);
    const visible=![...this.stageData.platforms,...this.stageData.ceilings].some(p=>Phaser.Geom.Intersects.LineToRectangle(line,new Phaser.Geom.Rectangle(p.x,p.y,p.w,28)));
    const alerted=shouldAggro(dx,dy,stats.aggro,visible);
@@ -338,6 +363,9 @@ export class GameScene extends Phaser.Scene {
   this.elapsed+=dt*1000;
   if(this.notice&&this.sceneTime>this.noticeUntil)this.notice='';
   const body=this.player.body as Phaser.Physics.Arcade.Body;
+  // Capture grounded contact before crouch/stand resizes the current-frame body.
+  const groundedFeet=body.bottom;
+  const supported=body.blocked.down&&hasGroundSupport(body,[...this.stageData.platforms,...this.stageData.ceilings]);
   if(body.blocked.down){this.groundedAt=this.elapsed;this.jumpsUsed=0;}
   const big=this.state.big;
   const wantsCrouch=this.keys.DOWN.isDown||this.keys.S.isDown||touch.crouch||controls.crouch;
@@ -353,9 +381,9 @@ export class GameScene extends Phaser.Scene {
   const axis=Number(this.keys.RIGHT.isDown||this.keys.D.isDown||touch.right)-Number(this.keys.LEFT.isDown||this.keys.A.isDown||touch.left)||controls.axis;
   const running=this.keys.SHIFT.isDown||this.keys.X.isDown||touch.run||controls.run;
   if(this.elapsed>=this.knockUntil)this.player.setVelocityX(advanceVelocity(body.velocity.x,this.crouching?axis*.3:axis,running&&!this.crouching,dt));
-  const groundJump=canJump(this.elapsed,this.groundedAt,this.pressedAt);
-  if(!this.crouching&&(groundJump||(jumpPressed&&this.jumpsUsed<2))){
-   const jump=tryJump(this.jumpsUsed||(!groundJump?1:0),groundJump);
+  const groundJump=jumpPressed&&supported;
+  if(!this.crouching&&groundJump){
+   const jump=tryJump(this.jumpsUsed,true);
    if(jump){this.player.setVelocityY(jump.velocity);this.jumpsUsed=jump.used;this.groundedAt=-10000;this.pressedAt=-10000;sound('jump');this.burst(this.player.x,body.bottom,this.jumpsUsed===2?0xb59bf1:0x6a9a9d,8);}
   }
   if(axis)this.player.setFlipX(axis<0);
@@ -373,15 +401,26 @@ export class GameScene extends Phaser.Scene {
   const handX=this.player.x+facing*(swinging?24:17),handY=body.top+body.height*.48;
   this.weapon.setPosition(handX,handY).setRotation(rotation).setAlpha(this.player.alpha);
   this.arm.clear();if(swinging){this.arm.lineStyle(9,0x0e1a25);this.arm.lineBetween(this.player.x+facing*7,body.top+14,handX,handY);this.arm.lineStyle(6,0x5d94b4);this.arm.lineBetween(this.player.x+facing*7,body.top+14,handX,handY);this.arm.fillStyle(0xe3a15d);this.arm.fillRect(handX-3,handY-3,6,6);
-   if(!this.meleeHitDone&&swing>.26){this.meleeHitDone=true;for(const enemy of this.enemies)if(enemy.sprite.active&&enemy.controlledAt<0&&meleeInRange(this.player.x,this.player.y,enemy.sprite.x,enemy.sprite.y,facing))this.hurtEnemy(enemy,WEAPONS.sword.damage);}
+   if(!this.meleeHitDone&&swing>.26){this.meleeHitDone=true;for(const enemy of this.enemies)if(enemy.sprite.active&&enemy.controlledAt<0&&meleeInRange(this.player.x,this.player.y,enemy.sprite.x,enemy.sprite.y,facing))this.hurtEnemy(enemy,WEAPONS.sword.damage*(this.activeBoosts.power?2:1));}
   }
   const switchKey=!!pad?.buttons[4]?.pressed||touch.weapon;if(just('ONE'))this.equip('slingshot');if(just('TWO'))this.equip('sword');if(just('E')||(switchKey&&!this.switchHeld))this.equip(this.equipped==='sword'?'slingshot':'sword');this.switchHeld=switchKey;
   if(this.keys.F.isDown||touch.shoot||controls.shoot)this.fire();
   const psi=this.keys.Q.isDown||touch.ability||controls.ability;if((psi&&!this.abilityHeld)||just('Q'))this.activatePsi();this.abilityHeld=psi;
   this.previousBottom=body.bottom;
   if(body.top>600){this.die();return;}
+  const interact=this.keys.DOWN.isDown||this.keys.S.isDown||this.keys.UP.isDown||touch.crouch||controls.crouch;
+  const doorPressed=interact&&!this.doorHeld;this.doorHeld=interact;
+  const doorX=this.area==='dungeon'?80:this.stageData.dungeonX;
+  if(canUseDungeonDoor(this.player.x,groundedFeet,doorX,this.groundY(doorX),supported,doorPressed)){
+   if(this.area==='dungeon')this.leaveDungeon();else if(!this.dungeonCleared)this.enterDungeon();return;
+  }
   // Gate requires walking into it on its platform, not passing beneath it.
   if(Math.abs(this.player.x-this.stageData.exit)<44&&Math.abs(body.bottom-this.groundY(this.stageData.exit))<70){
+   if(this.area==='dungeon'){
+    if(this.enemies.some(e=>e.sprite.active&&e.hp>0)){this.notify('دروازه قفل است؛ همهٔ دشمن‌های دانجن را شکست بده.');return;}
+    this.leaveDungeon(true);return;
+   }
+   recordStageResult(this.stageData.id,{allCollectibles:this.mainCoins.size===this.stageData.coins.length&&this.mainRadios.size===this.stageData.tapes.length,dungeonCleared:this.dungeonCleared});
    this.status='complete';this.physics.pause();this.player.setFrame(14);sound('win');this.burst(this.portal.x,this.portal.y-80,0xec8a88,32);this.emitHud();return;
   }
   if(this.sceneTime-this.lastEmit>100){this.lastEmit=this.sceneTime;this.emitHud();}

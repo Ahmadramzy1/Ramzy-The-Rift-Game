@@ -10,7 +10,7 @@ export function hitEnemy<T extends {hp:number;invulnerableUntil:number}>(e:T,dam
  return now<e.invulnerableUntil?e:{...e,hp:Math.max(0,e.hp-damage),invulnerableUntil:now+160};
 }
 export const shouldAggro=(dx:number,dy:number,radius:number,visible:boolean)=>visible&&Math.hypot(dx,dy)<radius;
-export const tryJump=(used:number,ground:boolean):{used:number;velocity:number}|null=>ground?{used:1,velocity:-565}:used<2?{used:2,velocity:-505}:null;
+export const tryJump=(_used:number,ground:boolean):{used:number;velocity:number}|null=>ground?{used:1,velocity:-565}:null;
 export const crouchBox=(big:boolean)=>({height:big?43:32,offsetY:big?61:72,width:big?36:27,offsetX:big?30:35});
 export const canStand=(player:{x:number;feet:number;width:number;height:number},blocks:{x:number;y:number;w:number;h:number}[])=>!blocks.some(b=>player.x+player.width/2>b.x&&player.x-player.width/2<b.x+b.w&&player.feet-player.height<b.y+b.h&&player.feet>b.y+1);
 export const useAbility=(s:PlayerState,hasTarget:boolean)=>s.abilityReady&&hasTarget?{...s,abilityReady:false}:s;

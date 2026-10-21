@@ -1,7 +1,7 @@
 export type Platform = {x:number;y:number;w:number;kind?:string};
 export type EnemyKind = 'crawler'|'bat'|'slime'|'husk'|'bloom';
 export type Stage = {
- id:number;name:string;english:string;subtitle:string;tile:string;color:number;width:number;exit:number;checkpoint:number;
+ id:number;name:string;english:string;subtitle:string;tile:string;color:number;width:number;exit:number;checkpoint:number;dungeonX:number;
  platforms:Platform[];enemies:{x:number;y:number;kind:EnemyKind;min:number;max:number}[];
  coins:{x:number;y:number}[];power:{x:number;y:number};tapes:{x:number;y:number}[];
  decor:{x:number;y:number;key:string;size:number}[];
@@ -48,7 +48,16 @@ export const STAGES:Stage[]=themes.map((t,i)=>{
  const decor=platforms.flatMap((p,j)=>[{x:p.x+80,y:p.y,key:i>4?'fence':'wood-fence',size:90},{x:p.x+p.w-70,y:p.y,key:j%2?'streetlamp':'tree',size:j%2?170:155}]);
  const hazards=i<2?[]:[platforms[1],...(i>4?[platforms[2],platforms[4]]:[])].map((p,j)=>({x:p.x+130+j*12,y:p.y,w:28+Math.min(i*3,25)}));
  const ceilings=i<3?[]:[{x:180,y:platforms[0].y-76,w:120+Math.min(i*5,45)}];
- return {id:i+1,name:t[0],english:t[1],subtitle:t[2],tile:t[3],color:t[4],width:3340,exit:3210,checkpoint:platforms[3].x+100,platforms:[...platforms,...optional],enemies,coins,power:{x:360+i*5,y:optional[0].y-45},tapes:[{x:1150+i*7,y:optional[1].y-45},{x:2280,y:optional[2].y-45}],decor,hazards,ceilings};
+ return {id:i+1,name:t[0],english:t[1],subtitle:t[2],tile:t[3],color:t[4],width:3340,exit:3210,checkpoint:platforms[3].x+100,dungeonX:platforms[2].x+65,platforms:[...platforms,...optional],enemies,coins,power:{x:360+i*5,y:optional[0].y-45},tapes:[{x:1150+i*7,y:optional[1].y-45},{x:2280,y:optional[2].y-45}],decor,hazards,ceilings};
+});
+
+/** Optional combat rooms. Their gates unlock only after every inhabitant is defeated. */
+export const DUNGEONS:Stage[]=STAGES.map((main,i)=>{
+ const platforms=[{x:0,y:458,w:430},{x:490,y:426,w:500},{x:1050,y:458,w:500},{x:1610,y:418,w:620}];
+ const families:EnemyKind[]=['husk','crawler','slime','bloom','bat'];
+ const count=3+Math.floor(i/2);
+ const enemies=platforms.flatMap((p,j)=>Array.from({length:count},(_,k)=>({x:p.x+(j===0?220:70)+k*(p.w-(j===0?260:140))/Math.max(1,count-1),y:p.y,kind:families[(i+j+k)%families.length],min:p.x+(j===0?195:40),max:p.x+p.w-40})));
+ return {...main,name:'دانجن '+main.name,english:main.english+' / Dungeon',subtitle:'همهٔ دشمن‌ها را شکست بده تا دروازه باز شود.',tile:'rift',color:0x9954c9,width:2230,exit:2110,checkpoint:80,dungeonX:80,platforms,enemies,coins:platforms.flatMap(p=>[.3,.5,.7].map(f=>({x:p.x+p.w*f,y:p.y-85}))),tapes:[],power:{x:1450,y:350},decor:platforms.map(p=>({x:p.x+p.w*.5,y:p.y,key:'rock',size:100})),hazards:platforms.slice(1).map(p=>({x:p.x+p.w*.64,y:p.y,w:25+Math.min(i*2,18)})),ceilings:i>2?[{x:1120,y:382,w:110}]:[]};
 });
 
 /** Conservative ballistic reachability graph. 1px horizontal sampling of a full
