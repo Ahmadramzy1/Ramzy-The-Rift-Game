@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>Soundtrack integration check</title>
+<button id="start">Test supplied soundtrack</button><pre id="result">Ready</pre>
+<script type="module">
+import {LoopingMusic} from '/src/game/music.ts';
+const button=document.querySelector('button'),result=document.querySelector('pre');
+button.onclick=async()=>{button.disabled=true;try{
+ const context=new AudioContext();await context.resume();
+ const response=await fetch('/audio/stranger-things-c418-remix.mp3');if(!response.ok)throw Error('MP3 HTTP '+response.status);
+ const buffer=await context.decodeAudioData(await response.arrayBuffer());
+ if(buffer.duration<10)throw Error('Invalid supplied audio');
+ const output=context.createGain();output.gain.value=0;output.connect(context.destination);
+ const short=context.createBuffer(buffer.numberOfChannels,context.sampleRate*2,context.sampleRate);
+ for(let c=0;c<buffer.numberOfChannels;c++)short.copyToChannel(buffer.getChannelData(c).subarray(0,short.length),c);
+ const music=new LoopingMusic(context,output,short);music.start();
+ await new Promise(r=>setTimeout(r,4800));music.start(true);await new Promise(r=>setTimeout(r,600));music.stop();
+ await new Promise(r=>setTimeout(r,500));await context.close();
+ result.textContent='PASS: supplied MP3 decoded ('+buffer.duration.toFixed(2)+' seconds, '+buffer.numberOfChannels+' channels); real audio engine completed multiple crossfaded loops, restart and fade-out without errors.';
+ }catch(e){result.textContent='FAIL: '+e.stack;}};
+</script>

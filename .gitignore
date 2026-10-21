@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.sites-runtime/
+*.zip
+*.tar.gz
+
+*.tsbuildinfo
+.env
+.env.*
+!.env.example

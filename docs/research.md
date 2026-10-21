@@ -1,0 +1,10 @@
+# Level design research and implementation decisions
+
+- Nintendo, Iwata Asks, New Super Mario Bros, vol.2 p.6: https://iwataasks.nintendo.com/interviews/wii/nsmb/1/5/ — coins teach a reliable safe route; first encounters should introduce readable behavior. Applied: safe opening runway, power-up before enemy, coins above the traversable route, optional tapes on higher ledges.
+- GDC 2018 Level Design Workshop, developer roundtable: https://www.gamedeveloper.com/design/gdc-2018-level-design-workshop-an-expert-roundtable-q-a — introduce a mechanic, change its context, then combine it with other challenges. Applied: stages 1–2 teach movement/combat; 3 introduces spikes; 4 adds crouch tunnels; 5–7 combine larger gaps and ranged enemies; 8–10 demand running, double jumps and selective use of the one-charge psychic ability.
+- Rayman Legends design-process talk: https://www.gdcvault.com/play/1020398/Rayman-Legends-The-Design-Process — short iteration cycles and in-engine validation. Applied: deterministic route reachability checks, per-stage enemy bounds and real-browser interaction checks, followed by playtest tuning.
+- Nintendo course-design booklet: https://www.nintendo.co.jp/wiiu/amaj/booklet/SuperMarioMakerBooklet.pdf — reference for platforming vocabulary and jump readability. No original Nintendo map, sprite, code or audio is copied.
+
+Eleven S5 costume reference, official Netflix production interview: https://www.netflix.com/tudum/features/stranger-things-digital-cover — gray zip-front cropped hoodie, red sweat shorts over gray sweatpants, navy bandana and high-top shoes. The game uses a newly generated pixel-art interpretation of that costume, not a screenshot or cutout from the show.
+
+Generated with the built-in image generation tool. Final prompt: revise the original pixel portrait to Eleven's season-five athletic costume, grown-out short brown hair, grateful wave, full body and transparent background. Original generation kept outside the runtime; only the selected S5 image is shipped as assets/eleven-s5.png.

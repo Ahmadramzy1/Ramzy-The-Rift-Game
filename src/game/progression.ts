@@ -1,0 +1,3 @@
+export function highestUnlocked(completed:number[]){let next=1;while(next<10&&completed.includes(next))next++;return next;}
+export const isUnlocked=(id:number,completed:number[])=>Number.isInteger(id)&&id>=1&&id<=highestUnlocked(completed);
+export function loadVolumes(raw:string|null){const defaults={sfx:.65,music:.3};try{const value=JSON.parse(raw||'{}');if(!value||typeof value!=='object')return defaults;const clamp=(v:unknown,fallback:number)=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(1,v)):fallback;return {sfx:clamp(value.sfx,.65),music:clamp(value.music,.3)};}catch{return defaults;}}

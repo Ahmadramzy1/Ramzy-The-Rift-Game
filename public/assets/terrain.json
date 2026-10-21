@@ -1,0 +1,32 @@
+{
+  "grass": {
+    "surfaceOffset": 13.473684210526315,
+    "height": 88.25263157894737,
+    "surfaceRow": 20,
+    "sourceWidth": 95
+  },
+  "stone": {
+    "surfaceOffset": 2.064516129032258,
+    "height": 79.82795698924731,
+    "surfaceRow": 3,
+    "sourceWidth": 93
+  },
+  "forest": {
+    "surfaceOffset": 8.170212765957446,
+    "height": 96.68085106382979,
+    "surfaceRow": 12,
+    "sourceWidth": 94
+  },
+  "metal": {
+    "surfaceOffset": 0.0,
+    "height": 86.95652173913044,
+    "surfaceRow": 0,
+    "sourceWidth": 92
+  },
+  "rift": {
+    "surfaceOffset": 12.25531914893617,
+    "height": 91.23404255319149,
+    "surfaceRow": 18,
+    "sourceWidth": 94
+  }
+}

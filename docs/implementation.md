@@ -1,0 +1,19 @@
+# RAMZY — final implementation
+
+User supplied assets and iterative requests are the source of truth. React owns Persian menus/HUD/settings/progression; Phaser 3.90 owns real collisions, gameplay animation, camera, AI and combat. Game canvas is exactly 1920×1080, with unchanged 960×540 world-space physics and a 2× camera. Scroll-factor planes are offset to account for camera zoom. All views fill a 16:9 surface, without the original webpage/cabinet chrome.
+
+Flow: provided RAMZY poster with real PLAY/SETTINGS/EXIT hotspots → full illustrated map with direct stage buttons, no side panel → gameplay → Eleven S5 thank-you entrance/dialogue/exit → map with next stage unlocked. Only stage 1 starts unlocked. Contiguous progression is validated and saved as ramzy-v2-progress. Settings have independent persisted SFX/music volumes; the user-supplied C418 remix MP3 starts after a user gesture. Decoded Web Audio sources overlap with one-second loop crossfades; stage starts fade out for 450ms and restart at offset zero, and exiting fades out. Menu/map/pause navigation preserves playback.
+
+Controls: acceleration, variable jump, coyote/buffer windows, one air jump, crouch collider with ceiling check, run, mouse/F attack, 1/2/E weapon selection, Q psychic ability, pause/retry. Standard controller polling supports gameplay and menu navigation. No physical controller was available for hardware testing.
+
+Two weapons: slingshot damage 1, range 250 world pixels, cooldown 320ms; sword damage 2, forward range 78, cooldown 430ms, animated arm/weapon swing with one impact per swing. Enemies have family/stage-dependent HP, visible health bars, patrol bounds, line of sight, tell time, chase behavior and ranged attacks for slime/bloom. Psychic ability lifts and explodes one target up to 480 units away; it consumes only on a valid target, stays consumed across death, and resets on stage restart/new stage.
+
+Ten authored routes progress from safe introductory encounters to larger gaps, spikes, crouch tunnels and combined enemy groups. Optional higher routes reward double jumping. Physical route traversal and combat are tested independently, not conflated.
+
+Asset pipeline: original alpha preserved; 21 hero frames bottom-anchored at source pixel 104 inside 96×112 frames, five enemy families × four frames, 36 props. Terrain strips remove rounded side borders and use measured opaque surface rows to align visual tops with colliders and prop feet. Original PNGs, bounds manifest, extraction script and contact sheet are included. Additional Eleven S5 pixel cutout uses the official final-season costume reference.
+
+Confirmed stage-2 defect: a prior damage knockUntil timestamp survived stage transition while elapsed reset to zero. Reproduced with old elapsed=8000, then stage 2; movement stayed locked. loadStage and respawn now reset knockUntil. Regression test passed in real Phaser.
+
+Validation: 23 Vitest tests; ten real Phaser engine checks on a 1920×1080 canvas; cinematic component verified for portrait/text/automatic exit; menu → locked map → stage flow verified in browser; independent volume sliders verified by changing and reading their values; native canvas dimensions confirmed through DOM. Fresh code review found no important/critical issues remaining. Browser/mobile responsiveness and final production build checked separately.
+
+Final life: only zero lives/gameover launches GameOver: 900ms pixel debris explosion + black fade, 550ms black, provided eight-second MP4 with fade-in/out, 300ms black, 3600ms generated RAMZY-style GAME OVER title, 800ms fade then map. Stage completion/unlocks remain intact. Gameplay shortcuts are blocked during the cinematic; autoplay denial offers focused keyboard/mouse/controller recovery; media errors advance to the title. Music fades out and resumes on map; video/explosion use SFX volume.
