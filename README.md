@@ -17,7 +17,7 @@ npm ci
 npm test
 npm run build:pages
 npm run check:pages
-npm run preview
+npm run preview:pages
 ```
 
 در پیش‌نمایش، مسیر `/Ramzy-The-Rift-Game/` را باز کنید. پیشرفت و تنظیمات ذخیره‌شده به دامنهٔ مرورگر وابسته‌اند؛ ذخیرهٔ نسخهٔ قبلی روی دامنهٔ ChatGPT به Pages منتقل نمی‌شود.
