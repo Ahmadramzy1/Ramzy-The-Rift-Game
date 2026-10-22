@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {GameScene} from '../src/game/GameScene';
 import {settings,touch} from '../src/game/bridge';
-import {loadCampaign,awardCoin,buyBoost} from '../src/game/campaign';
+import {CAMPAIGN_KEY,loadCampaign,awardCoin,buyItem} from '../src/game/campaign';
 import {command} from '../src/game/bridge';
 import {STAGES} from '../src/game/levels';
 const scene=new GameScene();settings.sound=false;
@@ -16,7 +16,9 @@ async function fresh(id=0){release();scene.loadStage(id);scene.startPlay();await
 document.getElementById('run')!.onclick=async()=>{
  (document.getElementById('run') as HTMLButtonElement).disabled=true;output.textContent='Running against actual Phaser 3 Arcade physics...';
  let passed=0;
- const test=async(name:string,fn:()=>Promise<void>)=>{if(new URLSearchParams(location.search).has('dungeonOnly')&&!/dungeon|wallet|collectibles/.test(name))return;try{await fn();passed++;report('PASS '+name);}catch(e){report('FAIL '+name+' — '+String(e));throw e;}};
+ const upgradeOnly=new URLSearchParams(location.search).has('upgradeOnly'),savedCampaign=localStorage.getItem(CAMPAIGN_KEY),savedLegacy=localStorage.getItem('ramzy-v2-progress');
+ if(upgradeOnly){localStorage.removeItem(CAMPAIGN_KEY);localStorage.removeItem('ramzy-v2-progress');}
+ const test=async(name:string,fn:()=>Promise<void>)=>{if(upgradeOnly&&!name.startsWith('upgrade:'))return;if(new URLSearchParams(location.search).has('dungeonOnly')&&!/dungeon|wallet|collectibles/.test(name))return;try{await fn();passed++;report('PASS '+name);}catch(e){report('FAIL '+name+' — '+String(e));throw e;}};
  try{
   await test('ground, acceleration and feet-preserving crouch',async()=>{
    await fresh();const b=scene.player.body as Phaser.Physics.Arcade.Body;assert(b.blocked.down,'spawn must stand on ground');
@@ -24,17 +26,18 @@ document.getElementById('run')!.onclick=async()=>{
    const feet=b.bottom;touch.crouch=true;await frames(4);assert(b.height===32,'crouch reduces collider');assert(Math.abs(b.bottom-feet)<2,'crouch keeps feet fixed');touch.crouch=false;await frames(4);assert(b.height===60,'stand restores collider');
   });
   await test('double jump works, third jump and walking-off-edge rescue are blocked',async()=>{
+   awardCoin(60);if(!loadCampaign().doubleJump)buyItem(1,'doubleJump');
    await fresh();touch.jump=true;await frames(3);assert(scene.jumpsUsed===1,'ground jump');touch.jump=false;await frames(10);const velocity=scene.player.body!.velocity.y;touch.jump=true;await frames(3);assert(scene.jumpsUsed===2,'second jump');assert(scene.player.body!.velocity.y<velocity,'air press launches second jump');touch.jump=false;await frames(3);touch.jump=true;await frames(3);assert(scene.jumpsUsed===2,'third jump blocked');release();
    await fresh();scene.player.setPosition(665,425);scene.player.setVelocity(0,130);await frames(2);touch.jump=true;await frames(3);assert(scene.player.body!.velocity.y>0,'gap has no support: must fall');release();
   });
   await test('solid ceiling tops also support a grounded jump',async()=>{
    await fresh(3);const ceiling=scene.stageData.ceilings[0];scene.player.setPosition(ceiling.x+ceiling.w/2,ceiling.y-48);scene.player.setVelocity(0);await frames(5);assert((scene.player.body as Phaser.Physics.Arcade.Body).blocked.down,'ceiling top is solid ground');touch.jump=true;await frames(3);assert(scene.player.body!.velocity.y<0,'can jump from the top of a ceiling');release();
   });
-  await test('slingshot projectile reduces HP and kills after two hits',async()=>{
-   await fresh();scene.player.setPosition(330,scene.groundY(330)-48);await frames(4);const e=scene.enemies[0];scene.fire(e.sprite.x,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(55);assert(e.hp===1,'first shot should leave 1 HP, actual '+e.hp);scene.fire(e.sprite.x,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(55);assert(e.hp===0&&!e.sprite.active,'second shot kills');
+  await test('slingshot projectile reduces HP and eventually kills',async()=>{
+   await fresh();scene.player.setPosition(330,scene.groundY(330)-48);await frames(4);const e=scene.enemies[0];scene.fire(e.sprite.x,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(55);assert(e.hp<e.maxHp,'first shot damages enemy');for(let i=0;i<e.maxHp&&e.hp>0;i++){scene.fire(e.sprite.x,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(55);}assert(e.hp===0&&!e.sprite.active,'shots kill');
   });
   await test('sword hits for 2 HP and ignores distant targets',async()=>{
-   await fresh();scene.equip('sword');const e=scene.enemies[0];scene.player.setPosition(e.sprite.x-65,scene.groundY(e.sprite.x)-48);await frames(3);scene.fire();await frames(15);assert(e.hp===0,'one sword hit removes 2 HP');assert(scene.enemies[1].hp===scene.enemies[1].maxHp,'distant enemy is unharmed');
+   await fresh();scene.equip('sword');const e=scene.enemies[0];scene.player.setPosition(e.sprite.x-65,scene.groundY(e.sprite.x)-48);await frames(3);scene.fire();await frames(15);assert(e.hp===e.maxHp-2,'one sword hit removes 2 HP');assert(scene.enemies[1].hp===scene.enemies[1].maxHp,'distant enemy is unharmed');
   });
   await test('stage 2 clears stage 1 knockback and moves immediately',async()=>{
    await fresh();scene.elapsed=8000;scene.damage(scene.player.x+30);await fresh(1);touch.right=true;await frames(10);touch.right=false;assert(scene.player.body!.velocity.x>100,'stage 2 movement must not inherit an 8-second knockback timer');
@@ -72,7 +75,7 @@ document.getElementById('run')!.onclick=async()=>{
   await test('coin wallet, room re-entry and purchased damage persist correctly',async()=>{
    await fresh();const coin=scene.stageData.coins[0],before=loadCampaign().wallet;scene.player.setPosition(coin.x,coin.y);await frames(5);assert(loadCampaign().wallet===before+1,'coin credited once');assert(scene.mainCoins.size===1,'main coin tracked');scene.enterDungeon();await frames(5);scene.leaveDungeon();await frames(5);assert(scene.state.coins===1&&scene.mainCoins.size===1,'room return retains collected coin');const balance=loadCampaign().wallet;scene.player.setPosition(coin.x,coin.y);await frames(5);assert(loadCampaign().wallet===balance,'collected coin cannot duplicate on room reload');
    scene.player.setPosition(scene.stageData.power.x,scene.stageData.power.y);await frames(5);assert(scene.state.big,'energy collected');scene.state.big=false;scene.enterDungeon();await frames(5);scene.leaveDungeon();await frames(5);scene.player.setPosition(scene.stageData.power.x,scene.stageData.power.y);await frames(5);assert(!scene.state.big,'room reload cannot replenish consumed energy');
-   awardCoin(100);assert(buyBoost(1,'power'),'buy power');assert(buyBoost(1,'energy'),'buy energy');command('stage',0);await frames(5);assert(scene.activeBoosts.power&&scene.state.big,'purchased boosts applied to stage');scene.die();scene.respawn();await frames(4);assert(scene.activeBoosts.power,'damage boost survives death');scene.equip('slingshot');const e=scene.enemies[0];scene.player.setPosition(e.sprite.x-90,scene.groundY(e.sprite.x)-48);await frames(3);scene.fire(e.sprite.x,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(15);assert(e.hp===0,'boosted sling deals exactly 2 HP');scene.activeBoosts={energy:false,power:false};
+   awardCoin(150);assert(buyItem(1,'extraLife'),'buy life');assert(buyItem(1,'ability'),'buy charge');command('stage',0);await frames(5);assert(scene.state.lives===4&&scene.abilityCharges===2,'purchased supplies applied');scene.die();scene.respawn();await frames(4);assert(scene.state.lives===3&&scene.abilityCharges===2,'death consumes life and retains unused charge');
   });
   await test('dungeon gate stays locked then clear + main gate earns three stars',async()=>{
    await fresh(2);scene.enterDungeon();await frames(5);scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(4);assert(scene.area==='dungeon','living enemies lock gate');for(const e of scene.enemies)scene.killEnemy(e);await frames(4);assert(scene.area==='main'&&scene.dungeonCleared,'all enemies plus gate returns with clear');scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(5);assert(scene.status==='complete','main gate completes');assert(loadCampaign().stars[3]===3,'three stars recorded');
@@ -80,6 +83,27 @@ document.getElementById('run')!.onclick=async()=>{
   await test('all main collectibles plus exit awards two stars',async()=>{
    await fresh(1);scene.stageData.coins.forEach((_,i)=>scene.mainCoins.add(i));scene.stageData.tapes.forEach((_,i)=>scene.mainRadios.add(i));scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(5);assert(loadCampaign().stars[2]===2,'all coins/radios require stage exit and award two');
   });
-  const expected=new URLSearchParams(location.search).has('dungeonOnly')?4:15;report('RESULT: '+passed+'/'+expected+' engine checks passed.');document.title='PASS '+passed+'/'+expected+' — RAMZY';
+  await test('upgrade: purchased lives, repeated charges and permanent unlocks',async()=>{
+   await fresh();assert(!scene.upgrades.doubleJump,'double jump locked by default');awardCoin(2000);
+   assert(buyItem(1,'extraLife')&&buyItem(1,'ability')&&buyItem(1,'ability'),'repeat charge purchases');assert(buyItem(1,'doubleJump'),'unlock double jump');
+   command('stage',0);await frames(5);assert(scene.state.lives===4&&scene.abilityCharges===3,'four lives and three charges');scene.activatePsi();assert(scene.abilityCharges===2&&scene.state.abilityReady,'additional charge usable');scene.die();scene.respawn();assert(scene.state.lives===3&&scene.abilityCharges===2,'death does not restore charge');
+   command('stage',1);await frames(5);assert(scene.state.lives===3&&scene.abilityCharges===1&&scene.upgrades.doubleJump,'only permanent upgrades follow to next stage');
+  });
+  await test('upgrade: double jump cooldown survives landing and room changes',async()=>{
+   await fresh();touch.jump=true;await frames(3);touch.jump=false;await frames(8);touch.jump=true;await frames(3);assert(scene.jumpsUsed===2,'purchased second jump');assert(scene.nextDoubleJumpAt>scene.elapsed+9800,'ten second cooldown starts');release();
+   scene.player.setPosition(110,410);scene.player.setVelocity(0);await frames(5);touch.jump=true;await frames(3);touch.jump=false;await frames(8);touch.jump=true;await frames(3);assert(scene.jumpsUsed===1,'landing cannot bypass cooldown');release();
+   const readyAt=scene.nextDoubleJumpAt;scene.enterDungeon();await frames(4);assert(scene.nextDoubleJumpAt===readyAt,'room change preserves cooldown');scene.leaveDungeon();await frames(4);scene.elapsed=readyAt;scene.player.setPosition(110,410);scene.player.setVelocity(0);await frames(5);touch.jump=true;await frames(3);touch.jump=false;await frames(8);touch.jump=true;await frames(3);assert(scene.jumpsUsed===2,'double jump ready after ten seconds');release();
+  });
+  await test('upgrade: two fire projectiles both damage, purple sword uses generated art and mouse aim',async()=>{
+   assert(buyItem(1,'slingshot'),'level two');await fresh();scene.fire(300,400);assert(scene.bullets.getLength()===2,'level two has two projectiles');assert(scene.bullets.getChildren().every(b=>!(b as Phaser.Physics.Arcade.Image).getData('fire')),'level two not burning');
+   assert(buyItem(1,'slingshot')&&buyItem(1,'legendarySword'),'top weapon upgrades');await fresh();scene.state.invincibleUntil=Infinity;const e=scene.enemies[0];e.sprite.setPosition(250,410);e.min=250;e.max=250;e.speed=0;e.hp=10;e.maxHp=10;scene.player.setPosition(170,410);await frames(3);
+   scene.fire(250,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);const shots=scene.bullets.getChildren() as Phaser.Physics.Arcade.Image[];assert(shots.length===2&&shots.every(s=>s.getData('fire')&&s.frame.name==='fire-pellet'),'two generated flame projectiles');await frames(16);assert(e.hp===6,'both fire pellets hit for two each: '+e.hp);
+   scene.equip('sword');assert(scene.weapon.texture.key==='upgrades'&&scene.weapon.frame.name==='legendary-blade','equipped sword uses purple generated image');await frames(20);e.sprite.setPosition(220,410);e.min=220;e.max=220;scene.player.setPosition(270,410);scene.player.setVelocity(0);await frames(3);scene.fire(220,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(15);assert(e.hp===0,'left aimed legendary sword hits for six');
+  });
+  await test('upgrade: blue dungeon token doubles main and dungeon earnings once at stage completion',async()=>{
+   await fresh();const before=loadCampaign().wallet,main=scene.stageData.coins[0];scene.player.setPosition(main.x,main.y);await frames(4);scene.enterDungeon();await frames(5);const coin=scene.stageData.coins[0];scene.player.setPosition(coin.x,coin.y);await frames(4);scene.enemies.forEach(e=>scene.killEnemy(e));scene.player.setPosition(scene.stageData.exit-85,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(6);assert(scene.multiplierCollected,'bobbing generated 2x coin collected');scene.leaveDungeon(true);await frames(4);scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(5);assert(scene.status==='complete','stage finished');assert(loadCampaign().wallet===before+4,'two collected coins credited twice');await frames(8);assert(loadCampaign().wallet===before+4,'payout never repeats');
+  });
+  const expected=upgradeOnly?4:new URLSearchParams(location.search).has('dungeonOnly')?4:19;report('RESULT: '+passed+'/'+expected+' engine checks passed.');document.title='PASS '+passed+'/'+expected+' — RAMZY';
  }catch(e){release();scene.pause();report('RESULT: stopped after '+passed+' passed. '+String(e));document.title='FAIL — Signal 86';}
+ finally{if(upgradeOnly){if(savedCampaign===null)localStorage.removeItem(CAMPAIGN_KEY);else localStorage.setItem(CAMPAIGN_KEY,savedCampaign);if(savedLegacy===null)localStorage.removeItem('ramzy-v2-progress');else localStorage.setItem('ramzy-v2-progress',savedLegacy);}}
 };

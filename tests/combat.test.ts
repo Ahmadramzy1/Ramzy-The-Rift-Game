@@ -24,9 +24,13 @@ describe('combat and scaling',()=>{
   expect(blocksPageScroll('ArrowDown')).toBe(true);expect(blocksPageScroll('Tab')).toBe(false);
  });
  it('gives enemy families different health and increases late-stage threat',()=>{
-  expect(enemyStats('crawler',1).hp).toBe(2);expect(enemyStats('bat',1).hp).toBe(1);expect(enemyStats('bloom',1).hp).toBe(5);
+  expect(enemyStats('crawler',1).hp).toBe(3);expect(enemyStats('bat',1).hp).toBe(2);expect(enemyStats('bloom',1).hp).toBe(8);
   expect(enemyStats('bloom',10).hp).toBeGreaterThan(enemyStats('bloom',1).hp);
   expect(enemyStats('crawler',10).speed).toBeGreaterThan(enemyStats('crawler',1).speed);
+ });
+ it('scales every family health including stage bonuses by 1.5 and rounds up',()=>{
+  const cases=[['crawler',[3,5,6,8]],['bat',[2,3,5,6]],['husk',[5,6,8,9]],['slime',[6,8,9,11]],['bloom',[8,9,11,12]]] as const;
+  for(const [kind,health] of cases)for(const [index,stage] of [1,4,7,10].entries())expect(enemyStats(kind,stage).hp).toBe(health[index]);
  });
  it('requires multiple shots, clamps hp and prevents repeated hit during cooldown',()=>{
   const e={hp:3,invulnerableUntil:0};

@@ -1,5 +1,8 @@
 export type Platform = {x:number;y:number;w:number;kind?:string};
 export type EnemyKind = 'crawler'|'bat'|'slime'|'husk'|'bloom';
+export function enemyFamilies(stage:number):EnemyKind[]{
+ return stage<2?['crawler']:stage<3?['crawler','bat']:stage<6?['crawler','bat','husk','slime']:['crawler','bat','husk','slime','bloom'];
+}
 export type Stage = {
  id:number;name:string;english:string;subtitle:string;tile:string;color:number;width:number;exit:number;checkpoint:number;dungeonX:number;
  platforms:Platform[];enemies:{x:number;y:number;kind:EnemyKind;min:number;max:number}[];
@@ -36,15 +39,15 @@ const routes:number[][][] = [
 export const STAGES:Stage[]=themes.map((t,i)=>{
  const platforms=routes[i].map(([x,y,w],j)=>({x,y,w:j<routes[i].length-1?w-Math.min(90,i*10):w}));
  const optional=[{x:300+i*5,y:platforms[0].y-86,w:128,kind:'floating'},{x:1090+i*7,y:platforms[2].y-86,w:128,kind:'floating'},{x:2220,y:platforms[4].y-86,w:128,kind:'floating'}];
- const families:EnemyKind[]=['crawler','bat','husk','slime','bloom'];
+ const families=enemyFamilies(i+1);
  const enemies=platforms.slice(1).map((p,j)=>({x:p.x+p.w*.6,y:p.y,kind:families[(i+j)%families.length],min:p.x+65,max:p.x+p.w-65}));
  // First encounter is a forgiving crawler; first battery comes before it.
  if(i===0) enemies[0].kind='crawler';
  enemies.unshift({x:platforms[0].w-90,y:platforms[0].y,kind:i<2?'crawler':families[i%families.length],min:Math.max(220,platforms[0].w-180),max:platforms[0].w-35});
  for(let j=0;j<Math.floor(i/2);j++){
-  const p=platforms[1+(j%4)];enemies.push({x:p.x+90,y:p.y,kind:families[(i+j+2)%5],min:p.x+45,max:p.x+p.w-45});
+  const p=platforms[1+(j%4)];enemies.push({x:p.x+90,y:p.y,kind:families[(i+j+2)%families.length],min:p.x+45,max:p.x+p.w-45});
  }
- const coins=platforms.flatMap(p=>[.28,.42,.56,.70].map(f=>({x:p.x+p.w*f,y:p.y-92})));
+ const coins=platforms.flatMap(p=>[.2,.32,.44,.56,.68,.8].map(f=>({x:p.x+p.w*f,y:p.y-92})));
  const decor=platforms.flatMap((p,j)=>[{x:p.x+80,y:p.y,key:i>4?'fence':'wood-fence',size:90},{x:p.x+p.w-70,y:p.y,key:j%2?'streetlamp':'tree',size:j%2?170:155}]);
  const hazards=i<2?[]:[platforms[1],...(i>4?[platforms[2],platforms[4]]:[])].map((p,j)=>({x:p.x+130+j*12,y:p.y,w:28+Math.min(i*3,25)}));
  const ceilings=i<3?[]:[{x:180,y:platforms[0].y-76,w:120+Math.min(i*5,45)}];
@@ -54,10 +57,12 @@ export const STAGES:Stage[]=themes.map((t,i)=>{
 /** Optional combat rooms. Their gates unlock only after every inhabitant is defeated. */
 export const DUNGEONS:Stage[]=STAGES.map((main,i)=>{
  const platforms=[{x:0,y:458,w:430},{x:490,y:426,w:500},{x:1050,y:458,w:500},{x:1610,y:418,w:620}];
- const families:EnemyKind[]=['husk','crawler','slime','bloom','bat'];
+ const families=enemyFamilies(i+1);
  const count=3+Math.floor(i/2);
  const enemies=platforms.flatMap((p,j)=>Array.from({length:count},(_,k)=>({x:p.x+(j===0?220:70)+k*(p.w-(j===0?260:140))/Math.max(1,count-1),y:p.y,kind:families[(i+j+k)%families.length],min:p.x+(j===0?195:40),max:p.x+p.w-40})));
- return {...main,name:'دانجن '+main.name,english:main.english+' / Dungeon',subtitle:'همهٔ دشمن‌ها را شکست بده تا دروازه باز شود.',tile:'rift',color:0x9954c9,width:2230,exit:2110,checkpoint:80,dungeonX:80,platforms,enemies,coins:platforms.flatMap(p=>[.3,.5,.7].map(f=>({x:p.x+p.w*f,y:p.y-85}))),tapes:[],power:{x:1450,y:350},decor:platforms.map(p=>({x:p.x+p.w*.5,y:p.y,key:'rock',size:100})),hazards:platforms.slice(1).map(p=>({x:p.x+p.w*.64,y:p.y,w:25+Math.min(i*2,18)})),ceilings:i>2?[{x:1120,y:382,w:110}]:[]};
+ // Alternate four/five evenly spaced coins per platform: 18 total, up from 12.
+ const coins=platforms.flatMap((p,j)=>Array.from({length:4+j%2},(_,k)=>({x:p.x+p.w*(k+1)/(5+j%2),y:p.y-85})));
+ return {...main,name:'دانجن '+main.name,english:main.english+' / Dungeon',subtitle:'همهٔ دشمن‌ها را شکست بده تا دروازه باز شود.',tile:'rift',color:0x9954c9,width:2230,exit:2110,checkpoint:80,dungeonX:80,platforms,enemies,coins,tapes:[],power:{x:1450,y:350},decor:platforms.map(p=>({x:p.x+p.w*.5,y:p.y,key:'rock',size:100})),hazards:platforms.slice(1).map(p=>({x:p.x+p.w*.64,y:p.y,w:25+Math.min(i*2,18)})),ceilings:i>2?[{x:1120,y:382,w:110}]:[]};
 });
 
 /** Conservative ballistic reachability graph. 1px horizontal sampling of a full

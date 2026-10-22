@@ -9,3 +9,23 @@ describe('ground-only jump and dungeon entrances',()=>{
  it('keeps every entrance and return landing clear of spikes',()=>{for(const stage of STAGES)for(const h of stage.hazards){expect(stage.dungeonX+25<h.x||stage.dungeonX-20>h.x+h.w).toBe(true);}});
  it('provides a grounded entrance and a reachable, harder dungeon for all ten stages',()=>{expect(DUNGEONS).toHaveLength(10);for(const stage of STAGES){const x=stage.dungeonX;expect(stage.platforms.some(p=>!p.kind&&x>p.x+45&&x<p.x+p.w-45)).toBe(true);const dungeon=DUNGEONS[stage.id-1];expect(dungeon.enemies.length).toBeGreaterThan(stage.enemies.length);expect(routeReachable(dungeon)).toBe(true);expect(dungeon.exit).toBeLessThan(dungeon.width);}});
 });
+
+describe('stage encounter and coin progression',()=>{
+ it('introduces the same enemy families in main routes and dungeons',()=>{
+  const unlocked=[['crawler'],['bat','crawler'],['bat','crawler','husk','slime'],['bat','crawler','husk','slime'],['bat','crawler','husk','slime'],['bat','bloom','crawler','husk','slime']];
+  for(const stages of [STAGES,DUNGEONS])for(const stage of stages)expect([...new Set(stage.enemies.map(e=>e.kind))].sort()).toEqual(unlocked[Math.min(stage.id-1,5)]);
+ });
+ it('places exactly 1.5 times the previous coins evenly above reachable route platforms',()=>{
+  for(const stage of [...STAGES,...DUNGEONS]){
+   const route=stage.platforms.filter(p=>!p.kind);
+   expect(routeReachable(stage)).toBe(true);
+   expect(stage.coins).toHaveLength(DUNGEONS.includes(stage)?18:(stage.id===1?30:36));
+   for(const p of route){
+    const coins=stage.coins.filter(c=>c.x>p.x&&c.x<p.x+p.w).sort((a,b)=>a.x-b.x);
+    expect(coins.length).toBeGreaterThanOrEqual(4);
+    for(const c of coins)expect(p.y-c.y).toBeGreaterThanOrEqual(80);
+    for(let j=2;j<coins.length;j++)expect(coins[j].x-coins[j-1].x).toBeCloseTo(coins[1].x-coins[0].x);
+   }
+  }
+ });
+});

@@ -3,7 +3,7 @@ import type {PlayerState} from './mechanics';
 export const clampChaseVelocity=(x:number,min:number,max:number,v:number)=>(x<=min+5&&v<0)||(x>=max-5&&v>0)?0:v;
 export const blocksPageScroll=(key:string)=>['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(key);
 export function enemyStats(kind:EnemyKind,stage:number){
- const hp={crawler:2,bat:1,husk:3,slime:4,bloom:5}[kind]+Math.floor((stage-1)/3);
+ const hp=Math.ceil(({crawler:2,bat:1,husk:3,slime:4,bloom:5}[kind]+Math.floor((stage-1)/3))*1.5);
  return {hp,speed:48+stage*6+(kind==='bat'?20:0),aggro:245+stage*12,cooldown:Math.max(900,2200-stage*110)};
 }
 export function hitEnemy<T extends {hp:number;invulnerableUntil:number}>(e:T,damage:number,now:number):T{

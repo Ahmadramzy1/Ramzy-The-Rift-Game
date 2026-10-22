@@ -1,27 +1,40 @@
 import {updates} from './bridge';
 import {readProgress} from './mechanics';
 
-export type BoostKind='energy'|'power';
-export type StageBoosts={energy:boolean;power:boolean};
-export type Campaign={version:1;wallet:number;stars:Record<number,number>;boosts:Record<number,StageBoosts>};
+export type ShopItem='extraLife'|'ability'|'doubleJump'|'slingshot'|'legendarySword';
+export type StageLoadout={extraLife:boolean;extraCharges:number};
+export type Campaign={version:2;wallet:number;stars:Record<number,number>;pending:Record<number,StageLoadout>;doubleJump:boolean;slingshotLevel:1|2|3;swordLevel:1|2};
 export const CAMPAIGN_KEY='ramzy-campaign-v1';
-export const BOOST_PRICES:Readonly<Record<BoostKind,number>>={energy:30,power:45};
-const emptyBoosts=():StageBoosts=>({energy:false,power:false});
+const emptyLoadout=():StageLoadout=>({extraLife:false,extraCharges:0});
 const validStage=(stage:number)=>Number.isInteger(stage)&&stage>=1&&stage<=10;
-const whole=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)?Math.max(0,Math.floor(value)):0;
+const whole=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)?Math.min(Number.MAX_SAFE_INTEGER,Math.max(0,Math.floor(value))):0;
 export function readCampaign(raw:string|null,legacy:string|null=null):Campaign{
- let parsed:Partial<Campaign>={};try{parsed=JSON.parse(raw||'{}')||{};}catch{/* Recover defaults. */}
- const result:Campaign={version:1,wallet:whole(parsed.wallet),stars:{},boosts:{}};
+ let parsed:Record<string,any>={};try{const value:unknown=JSON.parse(raw||'{}');if(value&&typeof value==='object'&&!Array.isArray(value))parsed=value;}catch{/* Recover defaults. */}
+ const result:Campaign={version:2,wallet:whole(parsed.wallet),stars:{},pending:{},doubleJump:parsed.doubleJump===true,slingshotLevel:parsed.slingshotLevel===3?3:parsed.slingshotLevel===2?2:1,swordLevel:parsed.swordLevel===2?2:1};
  for(let stage=1;stage<=10;stage++){
   const stars=whole(parsed.stars?.[stage]);if(stars)result.stars[stage]=Math.min(3,stars);
-  const boost=parsed.boosts?.[stage];if(boost)result.boosts[stage]={energy:boost.energy===true,power:boost.power===true};
+  const pending=parsed.pending?.[stage];if(pending)result.pending[stage]={extraLife:pending.extraLife===true,extraCharges:whole(pending.extraCharges)};
+  // Replaced supplies are refunded once: writing version 2 removes the old boosts.
+  if(parsed.version!==2){const boost=parsed.boosts?.[stage];result.wallet=whole(result.wallet+(boost?.energy===true?30:0)+(boost?.power===true?45:0));}
  }
  for(const stage of readProgress(legacy))result.stars[stage]=Math.max(1,result.stars[stage]||0);
  return result;
 }
-export function purchaseBoost(campaign:Campaign,stage:number,kind:BoostKind):Campaign{
- if(!validStage(stage)||!Object.hasOwn(BOOST_PRICES,kind)||campaign.boosts[stage]?.[kind]||campaign.wallet<BOOST_PRICES[kind])return campaign;
- return {...campaign,wallet:campaign.wallet-BOOST_PRICES[kind],boosts:{...campaign.boosts,[stage]:{...emptyBoosts(),...campaign.boosts[stage],[kind]:true}}};
+export function itemPrice(campaign:Campaign,kind:ShopItem):number|null{
+ switch(kind){case 'extraLife':return 100;case 'ability':return 50;case 'doubleJump':return campaign.doubleJump?null:60;case 'slingshot':return campaign.slingshotLevel===1?100:campaign.slingshotLevel===2?200:null;case 'legendarySword':return campaign.swordLevel===2?null:600;default:return null;}
+}
+export function purchaseItem(campaign:Campaign,stage:number,kind:ShopItem):Campaign{
+ const price=itemPrice(campaign,kind);
+ if(!validStage(stage)||price===null||campaign.wallet<price||(kind==='extraLife'&&campaign.pending[stage]?.extraLife))return campaign;
+ const next={...campaign,wallet:campaign.wallet-price};
+ if(kind==='extraLife'||kind==='ability'){
+  const loadout={...emptyLoadout(),...campaign.pending[stage]};
+  if(kind==='extraLife')loadout.extraLife=true;else loadout.extraCharges=whole(loadout.extraCharges+1);
+  return {...next,pending:{...campaign.pending,[stage]:loadout}};
+ }
+ if(kind==='doubleJump')return {...next,doubleJump:true};
+ if(kind==='slingshot')return {...next,slingshotLevel:campaign.slingshotLevel===1?2:3};
+ return {...next,swordLevel:2};
 }
 export function recordResult(campaign:Campaign,stage:number,result:{allCollectibles:boolean;dungeonCleared:boolean}):Campaign{
  if(!validStage(stage))return campaign;
@@ -38,15 +51,15 @@ function save(campaign:Campaign):Campaign{
  updates.dispatchEvent(new Event('campaign'));return campaign;
 }
 export function awardCoin(amount=1):Campaign{
- const campaign=loadCampaign();return save({...campaign,wallet:Math.min(Number.MAX_SAFE_INTEGER,campaign.wallet+whole(amount))});
+ const campaign=loadCampaign();return save({...campaign,wallet:whole(campaign.wallet+whole(amount))});
 }
-export function buyBoost(stage:number,kind:BoostKind):boolean{
- const campaign=loadCampaign(),next=purchaseBoost(campaign,stage,kind);if(next===campaign)return false;save(next);return true;
+export function buyItem(stage:number,kind:ShopItem):boolean{
+ const campaign=loadCampaign(),next=purchaseItem(campaign,stage,kind);if(next===campaign)return false;save(next);return true;
 }
-export function takeStageBoosts(stage:number):StageBoosts{
- const campaign=loadCampaign(),boosts={...emptyBoosts(),...campaign.boosts[stage]};
- if(validStage(stage)&&campaign.boosts[stage]){const pending={...campaign.boosts};delete pending[stage];save({...campaign,boosts:pending});}
- return boosts;
+export function takeStageLoadout(stage:number):StageLoadout{
+ const campaign=loadCampaign(),loadout={...emptyLoadout(),...campaign.pending[stage]};
+ if(validStage(stage)&&campaign.pending[stage]){const pending={...campaign.pending};delete pending[stage];save({...campaign,pending});}
+ return loadout;
 }
 export function recordStageResult(stage:number,result:{allCollectibles:boolean;dungeonCleared:boolean}):Campaign{
  return save(recordResult(loadCampaign(),stage,result));
