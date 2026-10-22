@@ -3,6 +3,11 @@ import {LoopingMusic} from './music';
 export type SoundKind='jump'|'coin'|'stomp'|'hit'|'power'|'win'|'checkpoint'|'shoot'|'psi'|'explosion';
 let context:AudioContext|undefined,sfxBus:GainNode|undefined,musicBus:GainNode|undefined;
 let music:LoopingMusic|undefined,loading:Promise<LoopingMusic>|undefined,wanted=false,request=0;
+export const MUSIC_TRACKS=[{title:'Evanescence — Going Under (Remastered)',file:'going-under-remastered.mp3'},{title:'8bit Stranger Things',file:'8bit-stranger-things.mp3'}] as const;
+let selectedTrack=0;try{const saved=Number(localStorage.getItem('ramzy-music-track'));if(Number.isInteger(saved)&&saved>=0&&saved<MUSIC_TRACKS.length)selectedTrack=saved;}catch{/* Default first track. */}
+export const getMusicSelection=()=>selectedTrack;
+export const getCurrentMusicTrack=()=>music?.currentTrack??selectedTrack;
+export function setMusicTrack(index:number){if(!Number.isInteger(index)||index<0||index>=MUSIC_TRACKS.length)return;selectedTrack=index;try{localStorage.setItem('ramzy-music-track',String(index));}catch{/* Session selection remains available. */}startMusic(true);}
 let volumes=loadVolumes(null);try{volumes=loadVolumes(localStorage.getItem('ramzy-volumes'));}catch{/* Defaults when storage is unavailable. */}
 export function getVolumes(){return {...volumes};}
 export function setVolumes(value:{sfx:number;music:number}){
@@ -17,12 +22,12 @@ function setup(){
 export function startMusic(restart=false){
  try{
   const c=setup();wanted=true;const id=++request;
-  if(music){music.start(restart);return;}
-  loading??=fetch(import.meta.env.BASE_URL+'audio/stranger-things-c418-remix.mp3')
+  if(music){music.start(restart,selectedTrack);return;}
+  loading??=Promise.all(MUSIC_TRACKS.map(track=>fetch(import.meta.env.BASE_URL+'audio/'+track.file)
    .then(r=>{if(!r.ok)throw new Error('Soundtrack unavailable');return r.arrayBuffer();})
-   .then(bytes=>c.decodeAudioData(bytes)).then(buffer=>music=new LoopingMusic(c,musicBus!,buffer))
+   .then(bytes=>c.decodeAudioData(bytes)))).then(buffers=>music=new LoopingMusic(c,musicBus!,buffers))
    .catch(error=>{loading=undefined;throw error;});
-  void loading.then(track=>{if(wanted&&id===request)track.start(restart);}).catch(()=>{});
+  void loading.then(track=>{if(wanted&&id===request)track.start(restart,selectedTrack);}).catch(()=>{});
  }catch{/* Browser autoplay restrictions never prevent playing the game. */}
 }
 export function stopMusic(){wanted=false;request++;music?.stop();}

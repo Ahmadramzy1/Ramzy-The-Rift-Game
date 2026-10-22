@@ -1,11 +1,14 @@
 import {describe,it,expect} from 'vitest';
 import {LoopingMusic} from '../src/game/music';
-function fixture(){
+function fixture(playlist=false){
  const voices:any[]=[];
  const context:any={currentTime:0,createGain(){const calls:any[]=[];return {gain:{value:0,setValueAtTime:(...a:any[])=>calls.push(['set',...a]),linearRampToValueAtTime:(...a:any[])=>calls.push(['ramp',...a]),cancelAndHoldAtTime:(...a:any[])=>calls.push(['hold',...a])},calls,connect(){},disconnect(){}};},createBufferSource(){const s:any={connect(g:any){s.gain=g;},disconnect(){},start(t:number){s.startAt=t;},stop(t:number){s.stopAt=t;}};voices.push(s);return s;}};
- return {context,voices,music:new LoopingMusic(context,{} as GainNode,{duration:10} as AudioBuffer)};
+ return {context,voices,music:new LoopingMusic(context,{} as GainNode,playlist?[{duration:10},{duration:20}] as AudioBuffer[]:{duration:10} as AudioBuffer)};
 }
 describe('soundtrack transport',()=>{
+ it('alternates both tracks forever with their own lengths',()=>{const {music,voices}=fixture(true);music.start();expect(voices[0].buffer.duration).toBe(10);expect(voices[1].buffer.duration).toBe(20);expect(voices[1].startAt).toBe(9);voices[0].onended();expect(voices[2].startAt).toBe(28);expect(voices[2].buffer.duration).toBe(10);voices[1].onended();expect(voices[3].startAt).toBe(37);expect(voices[3].buffer.duration).toBe(20);});
+ it('selects the second track and reports actual automatic playback',()=>{const {music,voices,context}=fixture(true);music.start(false,1);expect(voices[0].buffer.duration).toBe(20);expect(music.currentTrack).toBe(1);context.currentTime=19.5;expect(music.currentTrack).toBe(0);});
+ it('replaces queued songs when selection changes, without stale loops',()=>{const {music,voices,context}=fixture(true);music.start();context.currentTime=2;music.start(true,1);expect(voices[2].buffer.duration).toBe(20);expect(voices[0].stopAt).toBeCloseTo(2.45);voices[0].onended();expect(voices).toHaveLength(4);});
  it('starts at offset zero and schedules an overlapping, faded loop ahead of time',()=>{const {music,voices}=fixture();music.start();expect(voices).toHaveLength(2);expect(voices[0].startAt).toBe(0);expect(voices[1].startAt).toBe(9);expect(voices[0].gain.calls).toContainEqual(['ramp',0,10]);voices[0].onended();expect(voices[2].startAt).toBe(18);});
  it('does not layer music when navigating menus',()=>{const {music,voices}=fixture();music.start();music.start();expect(voices).toHaveLength(2);});
  it('fades existing and queued sources before a fresh stage starts',()=>{const {music,voices,context}=fixture();music.start();context.currentTime=3;music.start(true);expect(voices[0].stopAt).toBeCloseTo(3.45);expect(voices[1].stopAt).toBeCloseTo(3.45);expect(voices[2].startAt).toBeCloseTo(3.45);voices[0].onended();expect(voices).toHaveLength(4);});

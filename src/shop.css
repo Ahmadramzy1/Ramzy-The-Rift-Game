@@ -3,3 +3,5 @@
 @media(prefers-reduced-motion:reduce){.map-stars .earned{animation:none}}
 
 .world-map .map-art{container-type:inline-size}.map-stars{transform:translate(-50%,-50%);width:8.4cqw;height:2.3cqw;min-height:12px;font-size:clamp(9px,1.8cqw,28px);box-shadow:0 0 3px 2px #0d1524}
+
+.music-picker{display:grid;gap:8px;margin-top:20px}.music-picker label{font-size:14px;color:#e8d4bd}.music-picker select{width:100%;min-height:40px;padding:8px 10px;border:1px solid #667382;background:#101b2a;color:#eadac5;font:13px Consolas,monospace;direction:ltr}.music-picker select:focus-visible{outline:2px solid #e7a47b;outline-offset:3px}.music-picker small,.current-track{font-size:11px;line-height:1.8;color:#a8b9c6}.current-track b{display:block;color:#d4bd9c;font:11px Consolas,monospace;overflow-wrap:anywhere}@media(max-width:650px){.music-picker{margin-top:10px;gap:5px}.music-picker label{font-size:11px}.music-picker select{font-size:10px;min-height:30px;padding:5px}.music-picker small,.current-track,.current-track b{font-size:9px}}

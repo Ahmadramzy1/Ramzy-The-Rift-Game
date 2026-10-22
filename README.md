@@ -49,7 +49,7 @@ npm run preview
 - P/Esc: توقف؛ R: شروع دوباره. باتری سبز بزرگ‌شدن و جذب یک ضربه؛ سه قلب، سه جان، چک‌پوینت و دو رادیوی مخفی در هر مرحله.
 - دشمن‌ها HP متفاوت، گشت، تشخیص دید، تعقیب، هشدار کوتاه و حمله دارند. برخی تیر پرتاب می‌کنند. سرعت، HP، تعداد، شکاف‌ها و موانع به‌تدریج افزایش می‌یابند.
 - پایان هر مرحله Eleven با ظاهر فصل پنجم وارد تصویر می‌شود، تشکر می‌کند، خارج می‌شود و نقشه با مرحلهٔ بعدیِ بازشده نمایش داده می‌شود.
-- **SETTINGS**: Independent saved SFX/music volume. The user-supplied Stranger Things Theme Song C418 REMIX plays across menus and gameplay with loop crossfades. Stage starts fade and restart the track. Audio begins after the first user interaction.
+- **SETTINGS**: Independent saved SFX/music volume. The user-supplied Going Under / 8bit Stranger Things plays across menus and gameplay with loop crossfades. Stage starts fade and restart the track. Audio begins after the first user interaction.
 - PLAY درخواست تمام‌صفحه می‌دهد. اگر مرورگر اجازه ندهد، بازی همچنان کل صفحهٔ در دسترس را می‌پوشاند. از دکمهٔ تمام‌صفحه در تنظیمات هم می‌توان استفاده کرد.
 
 ## کنترلر استاندارد
@@ -82,3 +82,5 @@ npm run build
 سکه‌ها در کیف پول مرورگر ذخیره می‌شوند. پیش از هر مرحله، انرژی با ۳۰ سکه (حالت بزرگ و سپر یک ضربه) و قدرت با ۴۵ سکه (دو برابر آسیب هر دو سلاح) بخرید. خرید لغوشده در همان مرحله ذخیره می‌ماند؛ قدرت فعال تا خروج از مرحله و روی مرگ‌های فردی حفظ می‌شود.
 
 یک ستاره: پایان مرحله؛ دو ستاره: پایان مرحله همراه همهٔ سکه‌ها و رادیوهای مسیر اصلی؛ سه ستاره: پاک‌کردن دانجن و سپس پایان مرحله. بهترین رکورد حفظ می‌شود. سکه‌های دانجن پاداش جداگانهٔ کیف پول‌اند.
+
+Music playlist: Going Under (Remastered) and 8bit Stranger Things. Settings select the starting track and persist it as ramzy-music-track. The transport alternates both tracks indefinitely with crossfades; stage starts restart the selected track. Independent music/SFX volumes remain available.

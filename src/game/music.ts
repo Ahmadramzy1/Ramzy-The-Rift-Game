@@ -1,25 +1,32 @@
 /** Schedule the next decoded MP3 in advance so background-tab timer throttling cannot break the loop. */
 export class LoopingMusic {
- private voices=new Set<{source:AudioBufferSourceNode;gain:GainNode}>();
+ private voices=new Set<{source:AudioBufferSourceNode;gain:GainNode;at:number;index:number}>();
  private generation=0;
  private playing=false;
- constructor(private context:AudioContext,private output:GainNode,private buffer:AudioBuffer){}
- start(restart=false){
+ private buffers:AudioBuffer[];
+ private selected=0;
+ constructor(private context:AudioContext,private output:GainNode,buffers:AudioBuffer|AudioBuffer[]){this.buffers=Array.isArray(buffers)?buffers:[buffers];if(!this.buffers.length)throw new Error('Empty music playlist');}
+ get currentTrack(){return [...this.voices].filter(v=>v.at<=this.context.currentTime).sort((a,b)=>b.at-a.at)[0]?.index??this.selected;}
+ start(restart=false,index=this.selected){
   if(this.playing&&!restart)return;
   const delay=this.voices.size?0.45:0;
   this.stop();this.playing=true;
-  const generation=this.generation,fade=Math.min(1,this.buffer.duration/4),period=this.buffer.duration-fade;
-  const schedule=(at:number)=>{
+  this.selected=Number.isInteger(index)&&index>=0&&index<this.buffers.length?index:0;
+  const generation=this.generation;
+  let nextAt=this.context.currentTime+delay,nextIndex=this.selected;
+  const schedule=()=>{
    if(!this.playing||generation!==this.generation)return;
-   const source=this.context.createBufferSource(),gain=this.context.createGain(),voice={source,gain};
-   source.buffer=this.buffer;source.connect(gain);gain.connect(this.output);
+   const at=nextAt,index=nextIndex,buffer=this.buffers[index],fade=Math.min(1,buffer.duration/4),period=buffer.duration-fade;
+   nextAt=at+period;nextIndex=(index+1)%this.buffers.length;
+   const source=this.context.createBufferSource(),gain=this.context.createGain(),voice={source,gain,at,index};
+   source.buffer=buffer;source.connect(gain);gain.connect(this.output);
    gain.gain.setValueAtTime(0,at);gain.gain.linearRampToValueAtTime(1,at+fade);
-   gain.gain.setValueAtTime(1,at+period);gain.gain.linearRampToValueAtTime(0,at+this.buffer.duration);
+   gain.gain.setValueAtTime(1,at+period);gain.gain.linearRampToValueAtTime(0,at+buffer.duration);
    this.voices.add(voice);
-   source.onended=()=>{this.voices.delete(voice);source.disconnect();gain.disconnect();schedule(at+period*2);};
+   source.onended=()=>{this.voices.delete(voice);source.disconnect();gain.disconnect();schedule();};
    source.start(at,0);
   };
-  const at=this.context.currentTime+delay;schedule(at);schedule(at+period);
+  schedule();schedule();
  }
  stop(){
   this.playing=false;this.generation++;
