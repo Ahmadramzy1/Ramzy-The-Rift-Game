@@ -382,8 +382,8 @@ export class GameScene extends Phaser.Scene {
   const running=this.keys.SHIFT.isDown||this.keys.X.isDown||touch.run||controls.run;
   if(this.elapsed>=this.knockUntil)this.player.setVelocityX(advanceVelocity(body.velocity.x,this.crouching?axis*.3:axis,running&&!this.crouching,dt));
   const groundJump=jumpPressed&&supported;
-  if(!this.crouching&&groundJump){
-   const jump=tryJump(this.jumpsUsed,true);
+  if(!this.crouching&&jumpPressed){
+   const jump=tryJump(this.jumpsUsed,groundJump);
    if(jump){this.player.setVelocityY(jump.velocity);this.jumpsUsed=jump.used;this.groundedAt=-10000;this.pressedAt=-10000;sound('jump');this.burst(this.player.x,body.bottom,this.jumpsUsed===2?0xb59bf1:0x6a9a9d,8);}
   }
   if(axis)this.player.setFlipX(axis<0);

@@ -23,8 +23,8 @@ document.getElementById('run')!.onclick=async()=>{
    touch.right=true;await frames(24);touch.right=false;assert(b.velocity.x>190,'accelerates to walking speed');await frames(12);
    const feet=b.bottom;touch.crouch=true;await frames(4);assert(b.height===32,'crouch reduces collider');assert(Math.abs(b.bottom-feet)<2,'crouch keeps feet fixed');touch.crouch=false;await frames(4);assert(b.height===60,'stand restores collider');
   });
-  await test('ground-only jump: air jump and walking-off-edge rescue are blocked',async()=>{
-   await fresh();touch.jump=true;await frames(3);assert(scene.jumpsUsed===1,'ground jump');touch.jump=false;await frames(10);const velocity=scene.player.body!.velocity.y;touch.jump=true;await frames(3);assert(scene.jumpsUsed===1,'no air jump');assert(scene.player.body!.velocity.y>velocity,'air press does not launch');release();
+  await test('double jump works, third jump and walking-off-edge rescue are blocked',async()=>{
+   await fresh();touch.jump=true;await frames(3);assert(scene.jumpsUsed===1,'ground jump');touch.jump=false;await frames(10);const velocity=scene.player.body!.velocity.y;touch.jump=true;await frames(3);assert(scene.jumpsUsed===2,'second jump');assert(scene.player.body!.velocity.y<velocity,'air press launches second jump');touch.jump=false;await frames(3);touch.jump=true;await frames(3);assert(scene.jumpsUsed===2,'third jump blocked');release();
    await fresh();scene.player.setPosition(665,425);scene.player.setVelocity(0,130);await frames(2);touch.jump=true;await frames(3);assert(scene.player.body!.velocity.y>0,'gap has no support: must fall');release();
   });
   await test('solid ceiling tops also support a grounded jump',async()=>{

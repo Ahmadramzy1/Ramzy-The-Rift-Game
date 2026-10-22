@@ -40,9 +40,10 @@ describe('combat and scaling',()=>{
  });
 });
 describe('jump and crouch',()=>{
- it('only jumps from ground and resets on landing',()=>{
+ it('allows a second jump after takeoff, blocks a third, and resets on landing',()=>{
   const first=tryJump(0,true);expect(first?.used).toBe(1);
-  const second=tryJump(1,false);expect(second).toBe(null);
+  const second=tryJump(1,false);expect(second).toEqual({used:2,velocity:-505});
+  expect(tryJump(0,false)).toBeNull();
   expect(tryJump(2,false)).toBe(null);expect(tryJump(2,true)?.used).toBe(1);
  });
  it('keeps the feet fixed when crouching and refuses to stand under a ceiling',()=>{
