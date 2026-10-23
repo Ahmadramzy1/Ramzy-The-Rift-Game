@@ -1,9 +1,18 @@
 import {loadVolumes} from './progression';
-import {LoopingMusic} from './music';
+import {LazyLoopingMusic} from './music';
 export type SoundKind='jump'|'coin'|'stomp'|'hit'|'power'|'win'|'checkpoint'|'shoot'|'psi'|'explosion'|'laugh';
 let context:AudioContext|undefined,sfxBus:GainNode|undefined,musicBus:GainNode|undefined;
-let music:LoopingMusic|undefined,loading:Promise<LoopingMusic>|undefined,wanted=false,request=0;
-export const MUSIC_TRACKS=[{title:'Evanescence — Going Under (Remastered)',file:'going-under-remastered.mp3'},{title:'8bit Stranger Things',file:'8bit-stranger-things.mp3'}] as const;
+let music:LazyLoopingMusic|undefined;
+export const MUSIC_TRACKS=[
+ {title:'Evanescence — Going Under (Remastered)',file:'going-under-remastered.mp3'},
+ {title:'8bit Stranger Things',file:'8bit-stranger-things.mp3'},
+ {title:'Bon Jovi — Runaway',file:'runaway-bon-jovi.m4a'},
+ {title:'Scorpions — Rock You Like a Hurricane',file:'rock-you-like-a-hurricane.mp3'},
+ {title:'The Police — Every Breath You Take',file:'every-breath-you-take.mp3'},
+ {title:'Kate Bush — Running Up That Hill',file:'running-up-that-hill.m4a'},
+ {title:'The Clash — Should I Stay or Should I Go',file:'should-i-stay-or-should-i-go.m4a'},
+ {title:'David Bowie — Heroes',file:'heroes-david-bowie.m4a'}
+] as const;
 let selectedTrack=0;try{const saved=Number(localStorage.getItem('ramzy-music-track'));if(Number.isInteger(saved)&&saved>=0&&saved<MUSIC_TRACKS.length)selectedTrack=saved;}catch{/* Default first track. */}
 export const getMusicSelection=()=>selectedTrack;
 export const getCurrentMusicTrack=()=>music?.currentTrack??selectedTrack;
@@ -21,16 +30,15 @@ function setup(){
 }
 export function startMusic(restart=false){
  try{
-  const c=setup();wanted=true;const id=++request;
-  if(music){music.start(restart,selectedTrack);return;}
-  loading??=Promise.all(MUSIC_TRACKS.map(track=>fetch(import.meta.env.BASE_URL+'audio/'+track.file)
-   .then(r=>{if(!r.ok)throw new Error('Soundtrack unavailable');return r.arrayBuffer();})
-   .then(bytes=>c.decodeAudioData(bytes)))).then(buffers=>music=new LoopingMusic(c,musicBus!,buffers))
-   .catch(error=>{loading=undefined;throw error;});
-  void loading.then(track=>{if(wanted&&id===request)track.start(restart,selectedTrack);}).catch(()=>{});
+  const c=setup();
+  music??=new LazyLoopingMusic(c,musicBus!,MUSIC_TRACKS.length,async(index,signal)=>{
+   const response=await fetch(import.meta.env.BASE_URL+'audio/'+MUSIC_TRACKS[index].file,{signal});
+   if(!response.ok)throw new Error('Soundtrack unavailable');return c.decodeAudioData(await response.arrayBuffer());
+  });
+  music.start(restart,selectedTrack);
  }catch{/* Browser autoplay restrictions never prevent playing the game. */}
 }
-export function stopMusic(){wanted=false;request++;music?.stop();}
+export function stopMusic(){music?.stop();}
 export function playSound(kind:SoundKind){
  try{const c=setup();
   if(kind==='laugh'){

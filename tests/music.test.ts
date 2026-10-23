@@ -1,11 +1,13 @@
 import {describe,it,expect} from 'vitest';
-import {LoopingMusic} from '../src/game/music';
+import {LoopingMusic,LazyLoopingMusic} from '../src/game/music';
 function fixture(playlist=false){
  const voices:any[]=[];
  const context:any={currentTime:0,createGain(){const calls:any[]=[];return {gain:{value:0,setValueAtTime:(...a:any[])=>calls.push(['set',...a]),linearRampToValueAtTime:(...a:any[])=>calls.push(['ramp',...a]),cancelAndHoldAtTime:(...a:any[])=>calls.push(['hold',...a])},calls,connect(){},disconnect(){}};},createBufferSource(){const s:any={connect(g:any){s.gain=g;},disconnect(){},start(t:number){s.startAt=t;},stop(t:number){s.stopAt=t;}};voices.push(s);return s;}};
  return {context,voices,music:new LoopingMusic(context,{} as GainNode,playlist?[{duration:10},{duration:20}] as AudioBuffer[]:{duration:10} as AudioBuffer)};
 }
 describe('soundtrack transport',()=>{
+ it('loads only the selected and next songs, wrapping an eight-track playlist',async()=>{const {context,voices}=fixture(),loaded:number[]=[];const music=new LazyLoopingMusic(context,{} as GainNode,8,async index=>{loaded.push(index);return {duration:10+index} as AudioBuffer;});music.start(false,7);await new Promise(r=>setTimeout(r,0));expect(loaded).toEqual([7,0]);expect(voices).toHaveLength(2);voices[0].onended();await new Promise(r=>setTimeout(r,0));expect(loaded).toEqual([7,0,1]);context.currentTime=16.5;expect(music.currentTrack).toBe(0);});
+ it('cancels pending soundtrack loading when stopped',async()=>{const {context,voices}=fixture();let finish!:(buffer:AudioBuffer)=>void,signal!:AbortSignal;const music=new LazyLoopingMusic(context,{} as GainNode,8,(_index,s)=>{signal=s;return new Promise(resolve=>finish=resolve);});music.start();await Promise.resolve();music.stop();expect(signal.aborted).toBe(true);finish({duration:20} as AudioBuffer);await new Promise(r=>setTimeout(r,0));expect(voices).toHaveLength(0);});
  it('alternates both tracks forever with their own lengths',()=>{const {music,voices}=fixture(true);music.start();expect(voices[0].buffer.duration).toBe(10);expect(voices[1].buffer.duration).toBe(20);expect(voices[1].startAt).toBe(9);voices[0].onended();expect(voices[2].startAt).toBe(28);expect(voices[2].buffer.duration).toBe(10);voices[1].onended();expect(voices[3].startAt).toBe(37);expect(voices[3].buffer.duration).toBe(20);});
  it('selects the second track and reports actual automatic playback',()=>{const {music,voices,context}=fixture(true);music.start(false,1);expect(voices[0].buffer.duration).toBe(20);expect(music.currentTrack).toBe(1);context.currentTime=19.5;expect(music.currentTrack).toBe(0);});
  it('replaces queued songs when selection changes, without stale loops',()=>{const {music,voices,context}=fixture(true);music.start();context.currentTime=2;music.start(true,1);expect(voices[2].buffer.duration).toBe(20);expect(voices[0].stopAt).toBeCloseTo(2.45);voices[0].onended();expect(voices).toHaveLength(4);});

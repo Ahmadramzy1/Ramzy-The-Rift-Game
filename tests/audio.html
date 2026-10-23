@@ -1,16 +1,15 @@
 <!doctype html><meta charset="utf-8"><title>Soundtrack integration check</title>
 <button id="start">Test supplied soundtrack</button><pre id="result">Ready</pre>
 <script type="module">
-import {LoopingMusic} from '/src/game/music.ts';
+import {LazyLoopingMusic} from '/src/game/music.ts';
+import {MUSIC_TRACKS} from '/src/game/audio.ts';
 const button=document.querySelector('button'),result=document.querySelector('pre');
-button.onclick=async()=>{button.disabled=true;try{
- const context=new AudioContext();await context.resume();
- const buffers=await Promise.all(['going-under-remastered.mp3','8bit-stranger-things.mp3'].map(async file=>{const response=await fetch('/audio/'+file);if(!response.ok)throw Error('MP3 HTTP '+response.status);const buffer=await context.decodeAudioData(await response.arrayBuffer());if(buffer.duration<10)throw Error('Invalid audio');return buffer;}));
- const output=context.createGain();output.gain.value=0;output.connect(context.destination);
- const shorts=buffers.map(buffer=>{const short=context.createBuffer(buffer.numberOfChannels,context.sampleRate*2,context.sampleRate);for(let c=0;c<buffer.numberOfChannels;c++)short.copyToChannel(buffer.getChannelData(c).subarray(0,short.length),c);return short;});
- const music=new LoopingMusic(context,output,shorts);music.start();
- await new Promise(r=>setTimeout(r,4800));music.start(true,1);await new Promise(r=>setTimeout(r,600));music.stop();
- await new Promise(r=>setTimeout(r,500));await context.close();
- result.textContent='PASS: both supplied MP3s decoded ('+buffers.map(b=>b.duration.toFixed(2)+' seconds').join(', ')+'); real audio engine alternated both tracks, selected track 2, restarted and faded out without errors.';
- }catch(e){result.textContent='FAIL: '+e.stack;}};
+button.onclick=async()=>{button.disabled=true;let context;try{
+ context=new AudioContext();await context.resume();const clips=[],durations=[];
+ for(const track of MUSIC_TRACKS){const response=await fetch('/audio/'+track.file);if(!response.ok)throw Error('Audio HTTP '+response.status);const buffer=await context.decodeAudioData(await response.arrayBuffer());if(buffer.duration<10)throw Error('Invalid audio '+track.title);durations.push(track.title+' / '+buffer.duration.toFixed(1)+'s');const clip=context.createBuffer(buffer.numberOfChannels,Math.floor(context.sampleRate*.4),context.sampleRate);for(let c=0;c<buffer.numberOfChannels;c++)clip.copyToChannel(buffer.getChannelData(c).subarray(0,clip.length),c);clips.push(clip);result.textContent='Decoded '+clips.length+'/'+MUSIC_TRACKS.length;}
+ const output=context.createGain();output.gain.value=0;output.connect(context.destination);const loaded=[];
+ const music=new LazyLoopingMusic(context,output,clips.length,async index=>{loaded.push(index);return clips[index];});music.start(false,7);
+ await new Promise(r=>setTimeout(r,2800));if(loaded[0]!==7||loaded[1]!==0||!loaded.includes(6)||loaded.filter(i=>i===7).length<2)throw Error('Eight-track loop did not wrap');music.start(true,5);await new Promise(r=>setTimeout(r,100));if(music.currentTrack!==5)throw Error('Selection restart');music.stop();await new Promise(r=>setTimeout(r,500));
+ result.textContent='PASS: all eight MP3/M4A recordings decoded; lazy playlist wrapped last → first, selected/restarted and faded.\n'+durations.join('\n');document.title='PASS eight soundtrack files';
+ }catch(e){result.textContent='FAIL: '+e.stack;document.title='FAIL soundtrack';}finally{if(context)await context.close();}};
 </script>

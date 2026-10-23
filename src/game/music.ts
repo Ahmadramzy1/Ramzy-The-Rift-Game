@@ -35,3 +35,34 @@ export class LoopingMusic {
   this.voices.clear();
  }
 }
+
+/** Keep only the current and next decoded recordings in memory. */
+export class LazyLoopingMusic {
+ private voices=new Set<{source:AudioBufferSourceNode;gain:GainNode;at:number;index:number}>();
+ private generation=0;private playing=false;private selected=0;private controller?:AbortController;
+ constructor(private context:AudioContext,private output:GainNode,private count:number,private load:(index:number,signal:AbortSignal)=>Promise<AudioBuffer>){if(count<1)throw new Error('Empty playlist');}
+ get currentTrack(){return [...this.voices].filter(v=>v.at<=this.context.currentTime).sort((a,b)=>b.at-a.at)[0]?.index??this.selected;}
+ start(restart=false,index=this.selected){
+  if(this.playing&&!restart)return;
+  const delay=this.voices.size?.45:0;this.stop();this.playing=true;
+  this.selected=Number.isInteger(index)&&index>=0&&index<this.count?index:0;
+  const generation=this.generation,controller=this.controller=new AbortController();
+  let nextAt=this.context.currentTime+delay,nextIndex=this.selected,queue=Promise.resolve();
+  const schedule=()=>{queue=queue.then(async()=>{
+   for(let tries=0;tries<this.count;tries++){
+    if(!this.playing||generation!==this.generation)return;
+    const index=nextIndex;let buffer:AudioBuffer;
+    try{buffer=await this.load(index,controller.signal);}catch{if(controller.signal.aborted)return;nextIndex=(index+1)%this.count;continue;}
+    if(!this.playing||generation!==this.generation)return;
+    const at=Math.max(nextAt,this.context.currentTime),fade=Math.min(1,buffer.duration/4),period=buffer.duration-fade;
+    nextAt=at+period;nextIndex=(index+1)%this.count;
+    const source=this.context.createBufferSource(),gain=this.context.createGain(),voice={source,gain,at,index};source.buffer=buffer;source.connect(gain);gain.connect(this.output);
+    gain.gain.setValueAtTime(0,at);gain.gain.linearRampToValueAtTime(1,at+fade);gain.gain.setValueAtTime(1,at+period);gain.gain.linearRampToValueAtTime(0,at+buffer.duration);
+    this.voices.add(voice);source.onended=()=>{this.voices.delete(voice);source.disconnect();gain.disconnect();source.onended=null;source.buffer=null;if(generation===this.generation)schedule();};source.start(at,0);return;
+   }
+   this.playing=false;
+  }).catch(()=>{if(generation===this.generation)this.playing=false;});};
+  schedule();schedule();
+ }
+ stop(){this.playing=false;this.generation++;this.controller?.abort();const now=this.context.currentTime;for(const {source,gain}of this.voices){gain.gain.cancelAndHoldAtTime(now);gain.gain.linearRampToValueAtTime(0,now+.45);source.stop(now+.45);}this.voices.clear();}
+}
