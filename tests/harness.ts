@@ -8,9 +8,9 @@ const scene=new GameScene();settings.sound=false;
 const game=new Phaser.Game({type:Phaser.CANVAS,parent:'game',width:1920,height:1080,scene:[scene],physics:{default:'arcade',arcade:{gravity:{x:0,y:1500},fps:60,fixedStep:true}},audio:{noAudio:true},pixelArt:true});
 const output=document.getElementById('results')!;
 const enable=()=>{if(scene.player&&scene.keys){(document.getElementById('run') as HTMLButtonElement).disabled=false;output.textContent='Ready.';game.events.off('poststep',enable);}};game.events.on('poststep',enable);
-for(const [label,kind,level] of [['Preview slingshot','slingshot',1],['Preview steel sword','sword',1],['Preview purple sword','sword',2]] as const){
+for(const [label,kind,level,attack] of [['Preview slingshot','slingshot',1,false],['Preview steel sword','sword',1,false],['Preview purple sword','sword',2,false],['Preview sling shot','slingshot',1,true],['Preview sword attack','sword',2,true]] as const){
  const button=document.createElement('button');button.textContent=label;output.before(button);button.onclick=async()=>{
-  await fresh();scene.enemies.forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.upgrades.swordLevel=level;scene.equip(kind);await frames(5);scene.pause();
+  await fresh();scene.enemies.forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.upgrades.swordLevel=level;scene.equip(kind);await frames(5);if(attack){scene.fire(scene.player.x+100,scene.player.body!.center.y);await frames(7);}scene.cameras.main.stopFollow().setZoom(6).centerOn(scene.player.x+30,scene.player.y-25);scene.pause();
  };
 }
 function report(text:string){output.textContent+='\n'+text;}

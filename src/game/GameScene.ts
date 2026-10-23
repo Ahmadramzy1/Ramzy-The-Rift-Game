@@ -25,7 +25,7 @@ export class GameScene extends Phaser.Scene {
  area:'main'|'dungeon'='main';dungeonCleared=false;doorHeld=false;mainCheckpoint=110;
  mainCoins=new Set<number>();mainRadios=new Set<number>();dungeonCoins=new Set<number>();mainKills=new Set<number>();dungeonKills=new Set<number>();consumedPickups=new Set<string>();
  loadout:StageLoadout={extraLife:false,extraCharges:0};upgrades=loadCampaign();abilityCharges=1;nextDoubleJumpAt=0;multiplierCollected=false;bonusAwarded=false;swordAngle=0;bonusCoin?:Phaser.Physics.Arcade.Image;
- equipped:WeaponKind='slingshot';swingStarted=-1000;meleeHitDone=true;switchHeld=false;arm!:Phaser.GameObjects.Graphics;
+ equipped:WeaponKind='slingshot';swingStarted=-1000;meleeHitDone=true;switchHeld=false;
 
  constructor(){super('world');}
  preload(){
@@ -150,7 +150,6 @@ export class GameScene extends Phaser.Scene {
   this.makeCombatTextures();
   this.weapon=this.add.image(110,370,'slingshot').setOrigin(.5,.7).setDepth(12);
   this.updateWeaponArt();
-  this.arm=this.add.graphics().setDepth(11);
   this.psiBeam=this.add.graphics().setDepth(14);
   for(const [enemyIndex,e] of stage.enemies.entries()){
    if((this.area==='main'?this.mainKills:this.dungeonKills).has(enemyIndex))continue;
@@ -278,7 +277,7 @@ export class GameScene extends Phaser.Scene {
   const angle=Math.atan2((targetY??y)-y,targetX-x);this.aimAngle=angle;this.player.setFlipX(Math.cos(angle)<0);
   if(this.equipped==='sword'){this.swordAngle=angle;this.player.setFlipX(Math.cos(angle)<0);this.swingStarted=this.elapsed;this.meleeHitDone=false;sound('shoot');return;}
   const stats=slingshotStats(this.upgrades.slingshotLevel);
-  const pose=weaponPose('slingshot',x,body.top+13,y,this.player.flipX?-1:1,angle,-1,0);
+  const pose=weaponPose('slingshot',x,body.top+13,y,this.player.flipX?-1:1,angle,-1,0,Number(this.player.frame.name),this.player.y);
   const muzzleX=pose.handX,muzzleY=pose.handY-15;
   const shotAngle=Math.atan2((targetY??muzzleY)-muzzleY,targetX-muzzleX);
   for(let i=0;i<stats.pellets;i++){
@@ -442,21 +441,8 @@ export class GameScene extends Phaser.Scene {
   const swinging=this.equipped==='sword'&&swing>=0&&swing<1;
   const direction=swinging?this.swordAngle:aim;
   const recoil=Math.max(0,1-(this.elapsed-this.lastShot)/170);
-  const pose=weaponPose(this.equipped,this.player.x,body.top+13,body.center.y,facing,direction,swing,recoil);
+  const pose=weaponPose(this.equipped,this.player.x,body.top+13,body.center.y,facing,direction,swing,recoil,Number(this.player.frame.name),this.player.y);
   this.weapon.setPosition(pose.handX,pose.handY).setRotation(pose.rotation).setFlipX(facing<0).setAlpha(this.player.alpha);
-  this.arm.clear();this.arm.setAlpha(this.player.alpha);
-  const sleeve=(sx:number,sy:number,ex:number,ey:number,hx:number,hy:number)=>{
-   for(const [width,color] of [[10,0x101c28],[7,0x477a9a],[3,0x6ea5be]]){
-    this.arm.lineStyle(width,color);this.arm.beginPath();this.arm.moveTo(sx,sy);this.arm.lineTo(ex,ey);this.arm.lineTo(hx,hy);this.arm.strokePath();
-   }
-  };
-  sleeve(pose.shoulderX,pose.shoulderY,pose.elbowX,pose.elbowY,pose.handX-facing*4,pose.handY);
-  if(this.equipped==='slingshot'){
-   // The forward hand holds the stem; the other hand draws the pouch to the cheek.
-   sleeve(this.player.x-facing*4,body.top+15,this.player.x-facing*9,body.center.y+8,pose.drawX,pose.drawY);
-   this.arm.fillStyle(0xe1a16c);this.arm.fillRect(pose.drawX-3,pose.drawY-3,6,6);
-   this.arm.lineStyle(1,0xc5a277);this.arm.lineBetween(pose.handX-6,pose.handY-23,pose.drawX,pose.drawY);this.arm.lineBetween(pose.handX+6,pose.handY-23,pose.drawX,pose.drawY);
-  }
   if(swinging){
    if(!this.meleeHitDone&&swing>.26){this.meleeHitDone=true;for(const enemy of this.enemies)if(enemy.sprite.active&&enemy.controlledAt<0&&swordAimInRange(this.player.x,body.center.y,(enemy.sprite.body as Phaser.Physics.Arcade.Body).center.x,(enemy.sprite.body as Phaser.Physics.Arcade.Body).center.y,this.swordAngle))this.hurtEnemy(enemy,swordDamage(this.upgrades.swordLevel));}
   }
