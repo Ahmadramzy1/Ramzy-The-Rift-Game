@@ -21,6 +21,9 @@ for(const [label,time] of [['Preview Mind Flayer',2000],['Preview boss windup',4
  };
 }
 function assert(ok:unknown,message:string){if(!ok)throw new Error(message);}
+const wavePreview=document.createElement('button');wavePreview.textContent='Preview moving shockwave';output.before(wavePreview);wavePreview.onclick=async()=>{
+ await fresh(2);scene.enemies.filter(e=>e.kind!=='mindflayer').forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.player.setPosition(2670,410);scene.player.setVelocity(0);scene.state.invincibleUntil=Infinity;await frames(5);scene.elapsed=5001;await frames(34);scene.cameras.main.stopFollow().setZoom(3).centerOn(2830,380);scene.pause();
+};
 for(const [label,throwing] of [['Preview Billy laugh',false],['Preview Billy throw',true]] as const){
  const button=document.createElement('button');button.textContent=label;output.before(button);button.onclick=async()=>{
   await fresh(1);const b=scene.enemies.find(e=>e.kind==='billy')!;scene.enemies.filter(e=>e!==b).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.player.setPosition(b.sprite.x-(throwing?150:600),scene.groundY(b.sprite.x-(throwing?150:600))-48);scene.player.setVelocity(0);await frames(4);if(throwing){b.lastAttack=scene.elapsed-3990;await frames(6);}scene.cameras.main.stopFollow().setZoom(4).centerOn(b.sprite.x-35,b.baseY-25);scene.pause();
@@ -128,7 +131,7 @@ document.getElementById('run')!.onclick=async()=>{
    scene.player.setPosition(2730,410);scene.player.setVelocity(0);scene.state={...scene.state,hearts:3,big:true,invincibleUntil:0};await frames(5);
    scene.elapsed=4380;await frames(2);assert(Number(boss.sprite.frame.name)===2,'arms rise before impact');assert(scene.shockwaves.length===0,'no early impact');
    scene.elapsed=4990;await frames(2);assert(scene.shockwaves.length===2,'slam sends waves in both directions');await frames(49);assert(scene.state.hearts===1&&scene.state.lives===3,'ground wave removes two hearts, not lives');
-   scene.shockwaves.forEach(w=>w.art.destroy());scene.shockwaves=[];scene.player.setPosition(2830,410);scene.player.setVelocity(0);scene.state.hearts=3;scene.state.invincibleUntil=0;await frames(7);touch.jump=true;await frames(3);boss.lastAttack=scene.elapsed-5000;await frames(30);touch.jump=false;assert(scene.state.hearts===3,'jump avoids actual moving wave');
+   scene.shockwaves.forEach(w=>{w.art.destroy();w.trail.destroy();});scene.shockwaves=[];scene.player.setPosition(2830,410);scene.player.setVelocity(0);scene.state.hearts=3;scene.state.invincibleUntil=0;await frames(7);touch.jump=true;await frames(3);boss.lastAttack=scene.elapsed-5000;await frames(30);touch.jump=false;assert(scene.state.hearts===3,'jump avoids actual moving wave');
    scene.hurtEnemy(boss,15,true);await frames(2);assert(!boss.sprite.active&&scene.shockwaves.length===0,'defeat cancels remaining shockwaves');
   });
   await test('billy: stationary laugh, four-second throw cycle and gravity-driven molotov',async()=>{

@@ -21,7 +21,7 @@ export function readCampaign(raw:string|null,legacy:string|null=null):Campaign{
  return result;
 }
 export function itemPrice(campaign:Campaign,kind:ShopItem):number|null{
- switch(kind){case 'extraLife':return 100;case 'ability':return 50;case 'doubleJump':return campaign.doubleJump?null:60;case 'slingshot':return campaign.slingshotLevel===1?100:campaign.slingshotLevel===2?200:null;case 'legendarySword':return campaign.swordLevel===2?null:600;default:return null;}
+ switch(kind){case 'extraLife':return 100;case 'ability':return 50;case 'doubleJump':return campaign.doubleJump?null:60;case 'slingshot':return campaign.slingshotLevel===1?100:campaign.slingshotLevel===2?400:null;case 'legendarySword':return campaign.swordLevel===2?null:600;default:return null;}
 }
 export function purchaseItem(campaign:Campaign,stage:number,kind:ShopItem):Campaign{
  const price=itemPrice(campaign,kind);
