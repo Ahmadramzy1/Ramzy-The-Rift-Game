@@ -97,7 +97,7 @@ export class BossDirector {
   if(c.kind==='mindflayer'){
    const open=c.active&&mfCanTakeDamage(c.state,now);
    const row=!c.active?0:open?(Math.floor(clock/1100)%2?3:2):c.state.mode==='telegraph'?1:0;
-   c.stance.setTexture('mf-living',loopFrame(clock,row,row===1?110:155)).setOrigin(.5,240/256).setScale((136/171)*(1+breath*.009),(136/171)*(1-breath*.012));
+   c.stance.setTexture('mf-living',loopFrame(clock,row,row===1?110:155)).setOrigin(.5,240/256).setScale((136/161)*(1+breath*.009),(136/161)*(1-breath*.012));
    // The rooted arm sways without shifting its target node or ground contact.
    c.arm.setDisplaySize(124*(1+Math.sin(clock*.009)*.018),136);
   }else{
