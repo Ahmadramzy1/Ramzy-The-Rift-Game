@@ -6,6 +6,7 @@ import {command} from '../src/game/bridge';
 import {STAGES} from '../src/game/levels';
 import {medkitPlacement} from '../src/game/pickupPlacement';
 import {enemyCoinReward} from '../src/game/rewards';
+import {checkMindFlayer,checkVecna} from './tacticalBossChecks';
 const scene=new GameScene();settings.sound=false;
 const game=new Phaser.Game({type:Phaser.CANVAS,parent:'game',width:1920,height:1080,scene:[scene],physics:{default:'arcade',arcade:{gravity:{x:0,y:1500},fps:60,fixedStep:true}},audio:{noAudio:true},pixelArt:true});
 const output=document.getElementById('results')!;
@@ -16,14 +17,16 @@ for(const [label,kind,level,attack] of [['Preview slingshot','slingshot',1,false
  };
 }
 function report(text:string){output.textContent+='\n'+text;}
-for(const [label,time] of [['Preview Mind Flayer',2000],['Preview boss windup',4400],['Preview boss slam',5001]] as const){
+for(const [label,mode] of [['Preview armored Mind Flayer','idle'],['Preview arm warning','telegraph'],['Preview planted arm','stuck'],['Preview exposed core','exposed']] as const){
  const button=document.createElement('button');button.textContent=label;output.before(button);button.onclick=async()=>{
-  await fresh(2);scene.enemies.filter(e=>e.kind!=='mindflayer').forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.player.setPosition(2730,410);scene.player.setVelocity(0);await frames(5);scene.elapsed=time;await frames(2);scene.cameras.main.stopFollow().setZoom(3).centerOn(2830,380);scene.pause();
+  await fresh(2);const boss=scene.enemies.find(e=>e.kind==='mindflayer')!;scene.enemies.filter(e=>e!==boss).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});const c=scene.bossDirector.encounters.get(boss);if(!c||c.kind!=='mindflayer')return;
+  scene.player.setPosition(boss.sprite.x-180,c.arena.floor-48).setVelocity(0);scene.state.invincibleUntil=Infinity;boss.aggro=true;c.state={...c.state,mode,until:scene.elapsed+10000,cutArms:mode==='exposed'?2:0};c.armPoint={x:boss.sprite.x-130,y:c.arena.floor-32};await frames(2);scene.cameras.main.stopFollow().setZoom(3).centerOn(boss.sprite.x-50,c.arena.floor-95);scene.pause();
  };
 }
 function assert(ok:unknown,message:string){if(!ok)throw new Error(message);}
 const wavePreview=document.createElement('button');wavePreview.textContent='Preview moving shockwave';output.before(wavePreview);wavePreview.onclick=async()=>{
- await fresh(2);scene.enemies.filter(e=>e.kind!=='mindflayer').forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.player.setPosition(2670,410);scene.player.setVelocity(0);scene.state.invincibleUntil=Infinity;await frames(5);scene.elapsed=5001;await frames(34);scene.cameras.main.stopFollow().setZoom(3).centerOn(2830,380);scene.pause();
+ await fresh(2);const boss=scene.enemies.find(e=>e.kind==='mindflayer')!;scene.enemies.filter(e=>e!==boss).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});const c=scene.bossDirector.encounters.get(boss);if(!c||c.kind!=='mindflayer')return;
+ scene.player.setPosition(boss.sprite.x-200,c.arena.floor-48).setVelocity(0);scene.state.invincibleUntil=Infinity;boss.aggro=true;c.attack='slam';c.armPoint={x:boss.sprite.x-130,y:c.arena.floor-32};c.state={...c.state,mode:'telegraph',until:scene.elapsed+1};await frames(16);scene.cameras.main.stopFollow().setZoom(3).centerOn(boss.sprite.x-70,c.arena.floor-95);scene.pause();
 };
 for(const [label,throwing] of [['Preview Billy laugh',false],['Preview Billy throw',true]] as const){
  const button=document.createElement('button');button.textContent=label;output.before(button);button.onclick=async()=>{
@@ -33,9 +36,10 @@ for(const [label,throwing] of [['Preview Billy laugh',false],['Preview Billy thr
 const frames=(count:number)=>new Promise<void>(resolve=>{let n=0;const tick=()=>{if(++n>=count){game.events.off('poststep',tick);resolve();}};game.events.on('poststep',tick);});
 function release(){for(const key of Object.values(scene.keys))key.isDown=false;for(const key of Object.keys(touch) as (keyof typeof touch)[])touch[key]=false;}
 async function fresh(id=0){release();scene.loadStage(id);scene.startPlay();await frames(15);}
-for(const [label,phase] of [['Preview Vecna',0],['Preview Vecna rage',2700],['Preview Vecna leap',3001],['Preview Vecna impact',4000]] as const){
+for(const [label,pose] of [['Preview Vecna','idle'],['Preview Vecna psychic','psychic'],['Preview Vecna high wave','high-wave'],['Preview Vecna leap','leap'],['Preview Vecna exposed','exposed']] as const){
  const button=document.createElement('button');button.textContent=label;output.before(button);button.onclick=async()=>{
-  await fresh(4);scene.enterDungeon();await frames(4);const v=scene.enemies.find(e=>e.kind==='vecna')!;scene.enemies.filter(e=>e!==v).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.player.setPosition(v.sprite.x-150,v.baseY-48);scene.player.setVelocity(0);await frames(4);v.lastAttack=scene.elapsed;scene.elapsed+=phase;await frames(2);if(phase>3000)await frames(14);if(phase>=4000&&v.leap){scene.player.setPosition(v.leap.tx+180,v.leap.ty-48);scene.state.invincibleUntil=Infinity;scene.elapsed=v.leap.at+900;await frames(10);}scene.cameras.main.stopFollow().setZoom(2.5).centerOn(v.sprite.x-25,250);scene.pause();
+  await fresh(4);scene.enterDungeon();await frames(4);const v=scene.enemies.find(e=>e.kind==='vecna')!;scene.enemies.filter(e=>e!==v).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});const c=scene.bossDirector.encounters.get(v);if(!c||c.kind!=='vecna')return;
+  scene.player.setPosition(v.sprite.x-150,c.arena.floor-48).setVelocity(0);scene.state.invincibleUntil=Infinity;v.aggro=true;c.attack=pose==='psychic'||pose==='high-wave'?pose:null;c.cueUntil=scene.elapsed+10000;c.nextAt=scene.elapsed+10000;c.target={x:c.devices[0].x,y:c.arena.floor};c.flight=pose==='leap'?{at:scene.elapsed-300,from:{x:v.sprite.x,y:c.arena.floor},to:c.target}:undefined;c.state={exposedUntil:pose==='exposed'?scene.elapsed+10000:0,psychicUsed:false};await frames(2);scene.cameras.main.stopFollow().setZoom(2.5).centerOn(v.sprite.x-25,c.arena.floor-150);scene.pause();
  };
 }
 document.getElementById('run')!.onclick=async()=>{
@@ -131,16 +135,10 @@ document.getElementById('run')!.onclick=async()=>{
    scene.equip('sword');assert(scene.weapon.texture.key==='held-weapons'&&scene.weapon.frame.name==='grip-purple','equipped sword uses purple generated image with gripping hand');await frames(20);e.sprite.setPosition(220,410);e.min=220;e.max=220;scene.player.setPosition(270,410);scene.player.setVelocity(0);await frames(3);scene.fire(220,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(15);assert(e.hp===0,'left aimed legendary sword hits for six');
   });
   await test('upgrade: blue dungeon token doubles main and dungeon earnings once at stage completion',async()=>{
-   await fresh();const before=loadCampaign().wallet,main=scene.stageData.coins[0];scene.player.setPosition(main.x,main.y);await frames(4);scene.enterDungeon();await frames(5);const coin=scene.stageData.coins[0];scene.player.setPosition(coin.x,coin.y);await frames(4);scene.enemies.forEach(e=>scene.killEnemy(e));scene.player.setPosition(scene.stageData.exit-85,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(6);assert(scene.multiplierCollected,'bobbing generated 2x coin collected');scene.leaveDungeon(true);await frames(4);scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(5);assert(scene.status==='complete','stage finished');assert(loadCampaign().wallet===before+4,'two collected coins credited twice');await frames(8);assert(loadCampaign().wallet===before+4,'payout never repeats');
+   await fresh();const before=loadCampaign().wallet,main=scene.stageData.coins[0];scene.player.setPosition(main.x,main.y);await frames(4);scene.enterDungeon();await frames(5);const coin=scene.stageData.coins[0];scene.player.setPosition(coin.x,coin.y);await frames(4);scene.enemies.forEach(e=>scene.killEnemy(e));scene.player.setPosition(scene.stageData.exit-85,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(6);assert(scene.multiplierCollected,'bobbing generated 2x coin collected');scene.leaveDungeon(true);await frames(4);scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(5);assert(scene.status==='complete','stage finished');const expectedWallet=before+(2+scene.killCoins)*2;assert(loadCampaign().wallet===expectedWallet,'two pickup coins and combat coins credited twice');await frames(8);assert(loadCampaign().wallet===expectedWallet,'payout never repeats');
   });
-  await test('boss: stage three windup, five-second slam, two-heart ground hit and jump escape',async()=>{
-   await fresh(2);const boss=scene.enemies.find(e=>e.kind==='mindflayer')!;assert(boss.hp===60&&boss.maxHp===60,'boss has exactly 60 HP');assert(Math.abs(boss.sprite.scaleY*386-136)<1,'visible idle height is twice 68px hero');
-   scene.enemies.filter(e=>e!==boss).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});
-   scene.player.setPosition(2730,410);scene.player.setVelocity(0);scene.state={...scene.state,hearts:3,big:true,invincibleUntil:0};await frames(5);
-   scene.elapsed=4380;await frames(2);assert(Number(boss.sprite.frame.name)===2,'arms rise before impact');assert(scene.shockwaves.length===0,'no early impact');
-   scene.elapsed=4990;await frames(2);assert(scene.shockwaves.length===2,'slam sends waves in both directions');await frames(49);assert(scene.state.hearts===1&&scene.state.lives===3,'ground wave removes two hearts, not lives');
-   scene.shockwaves.forEach(w=>{w.art.destroy();w.trail.destroy();});scene.shockwaves=[];scene.player.setPosition(2830,410);scene.player.setVelocity(0);scene.state.hearts=3;scene.state.invincibleUntil=0;await frames(7);touch.jump=true;await frames(3);boss.lastAttack=scene.elapsed-5000;await frames(30);touch.jump=false;assert(scene.state.hearts===3,'jump avoids actual moving wave');
-   scene.hurtEnemy(boss,boss.maxHp,true);await frames(2);assert(!boss.sprite.active&&scene.shockwaves.length===0,'defeat cancels remaining shockwaves');
+  await test('boss: armor, planted arms and four-second core opening',async()=>{
+   await checkMindFlayer(scene,frames,assert);
   });
   await test('billy: stationary laugh, four-second throw cycle and gravity-driven molotov',async()=>{
    await fresh(1);const b=scene.enemies.find(e=>e.kind==='billy')!,originalX=b.sprite.x;assert(b.hp===7,'seven HP at stage two');
@@ -155,20 +153,13 @@ document.getElementById('run')!.onclick=async()=>{
   await test('medkit: pickup above floating platform restores HP and waits when health is full',async()=>{
    await fresh();scene.enemies.forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});const p=medkitPlacement(scene.stageData);scene.player.setPosition(p.x,p.y+10);scene.player.setVelocity(0);scene.state.hearts=3;await frames(6);assert(!scene.consumedPickups.has('mainmedkit'),'full health does not waste medkit');scene.state.hearts=2;await frames(5);assert(scene.state.hearts===3&&scene.consumedPickups.has('mainmedkit'),'standing on floating platform collects and heals');
   });
-  await test('vecna: dungeon-five rage, locked jump, dodge, three-heart landing and defeat gate',async()=>{
-   await fresh(4);scene.enterDungeon();await frames(4);const v=scene.enemies.find(e=>e.kind==='vecna')!;assert(v.hp===100&&v.maxHp===100&&scene.enemies.length===5,'100 HP boss with four guards');assert(Math.abs(v.sprite.scaleX*554-204)<1,'boss is three times visible hero height');
-   scene.enemies.filter(e=>e!==v).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});
-   scene.player.setPosition(v.sprite.x-800,scene.groundY(v.sprite.x-800)-48);scene.player.setVelocity(0);await frames(2);assert(v.aggro,'detects hero at 800, beyond old 640 range');assert(scene.elapsed-v.lastAttack>2000,'first leap timer advances immediately');
-   scene.player.setPosition(v.min+100,v.baseY-48);scene.player.setVelocity(0);await frames(5);v.lastAttack=scene.elapsed;scene.elapsed=v.lastAttack+2600;await frames(2);assert(Number(v.sprite.frame.name)===1&&!!v.target,'rage marks the landing');
-   scene.elapsed=v.lastAttack+2990;await frames(2);assert(!!v.leap,'three seconds launches leap');const jump=v.leap!;await frames(12);assert(v.sprite.y<jump.y-60,'Vecna visibly airborne');scene.player.setPosition(jump.tx+200,v.baseY-48);scene.player.setVelocity(0);scene.elapsed=jump.at+890;await frames(2);assert(scene.state.hearts===3&&scene.status==='playing','lateral dodge avoids impact');assert(Math.abs(v.sprite.x-jump.tx)<1,'landing remains on marked position');assert(scene.impacts.length===1&&scene.shockwaves.filter(w=>w.vecna).length===2,'landing creates animated explosion and two waves');
-   const wave=scene.shockwaves.find(w=>w.vecna&&w.direction===1)!;const wx=wave.x;await frames(5);assert(wave.x>wx,'ground wave travels');
-   scene.player.setPosition(wave.x+25,v.baseY-140);scene.player.setVelocity(0,-100);await frames(5);assert(scene.state.hearts===3,'airborne hero clears moving wave');
-   scene.player.setPosition(wave.x+25,v.baseY-48);scene.player.setVelocity(0);scene.state.invincibleUntil=0;await frames(10);assert(scene.status==='dead'&&scene.state.lives===2,'ground wave deals three hearts and consumes one life');scene.respawn();scene.hurtEnemy(v,v.maxHp,true);await frames(2);assert(!v.sprite.active&&scene.shockwaves.length===0,'defeat cancels boss waves');scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(4);assert(scene.area==='main'&&scene.dungeonCleared,'defeat unlocks dungeon clear exit');
+  await test('vecna: three phases, psychic cover and electric-pylon opening',async()=>{
+   await checkVecna(scene,frames,assert);
   });
   await test('reward: exact coins, corpse guard, room persistence and double reward',async()=>{
    await fresh(9);const before=loadCampaign().wallet;
    const kinds=['crawler','husk','mindflayer','vecna'] as const;let total=0;
-   for(const kind of kinds){const e=scene.enemies.find(e=>e.kind===kind)!;scene.hurtEnemy(e,e.maxHp,true);scene.killEnemy(e);total+=enemyCoinReward(kind);assert(loadCampaign().wallet===before+total,'exact single reward '+kind);}
+   for(const kind of kinds){const e=scene.enemies.find(e=>e.kind===kind)!;scene.killEnemy(e);scene.killEnemy(e);total+=enemyCoinReward(kind);assert(loadCampaign().wallet===before+total,'exact single reward '+kind);}
    assert(scene.killCoins===127&&scene.state.coins===127,'kill coins shown in HUD');scene.enterDungeon();await frames(2);scene.leaveDungeon();await frames(2);assert(scene.killCoins===127,'room changes retain earned bounty');assert(scene.enemies.filter(e=>kinds.includes(e.kind as typeof kinds[number])&&!e.sprite.active).length===0,'killed enemies are not respawned by room travel');
    scene.multiplierCollected=true;scene.enemies.filter(e=>e.kind==='mindflayer'||e.kind==='vecna').forEach(e=>scene.killEnemy(e));const earned=scene.killCoins,balance=loadCampaign().wallet;scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(4);assert(loadCampaign().wallet===balance+earned,'2x includes combat earnings');
   });

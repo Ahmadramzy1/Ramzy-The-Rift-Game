@@ -1,0 +1,36 @@
+[
+  {
+    "asset": "public/assets/mf-phases.png",
+    "prompt": "Reference image is the existing Mind Flayer boss sprite design; preserve same monstrous red-black fleshy many-limbed creature identity, palette and pixel detail. Create a NEW transparent production sprite atlas, ONE horizontal row of FOUR equal cells with generous transparent margins. Four full body states LEFT TO RIGHT: 1 armored crouching body with dark interlocking rib plates hiding chest; 2 same creature raising two main tentacles preparing ground slam; 3 same crouching creature with front chest plates peeled outward revealing a very bright cyan-violet circular CORE centered just below head; 4 same body stunned with cut tentacle stumps, chest core visible. All feet at same90percent cell baseline, head/body same scale and center, NO cast shadow, NO scenery, NO text. Crisp detailed 16bit horror platformer pixel art, strict side view facing left. Assets will be runtime split into four equal frames. Do not draw a concept board.",
+    "referenceAssets": [
+      "mind-flayer.png"
+    ]
+  },
+  {
+    "asset": "public/assets/mf-arm.png",
+    "prompt": "Design transparent PNG sprite atlas for same red-black fleshy Mind Flayer boss. Exactly FOUR EQUAL cells in a SINGLE horizontal row, no text. One isolated thick organic tentacle arm in each cell, same scale and foot baseline90percent: 1 curling raised tentacle arcing upward with hooked tip, 2 tentacle planted vertically in cracked ground as if stuck, with a highly visible CYAN-VIOLET round weakpoint node on the lower third above ground, 3 same planted arm with node shattered and a clear cut across lower arm with glowing slash; 4 severed tentacle stump with disintegration particles. Side-on 16bit pixelart, red-black fibrous flesh, violet blue weakpoint distinctive from red attacks. No body, no hero, no scenery, no background, no labels. Each contained in its quarter with generous padding. Keep pivot tip/ground consistent.",
+    "referenceAssets": []
+  },
+  {
+    "asset": "public/assets/vecna-stances.png",
+    "prompt": "Reference is existing Vecna pixel game boss, preserve EXACT recognizable bald pale humanoid covered in red-black roots/vines, proportions and palette. Create NEW transparent production sprite atlas, ONE horizontal row FOUR equally sized cells. Four full-body states LEFT TO RIGHT: 1 upright one arm raised, eyes and fingertips glowing purple for TELEPATHIC CHANNEL; 2 upright open palm extended horizontally toward left, crimson ring at palm for HIGH WAVE CAST; 3 kneeling one hand touching ground for LOW WAVE CAST; 4 upright staggered, chest vine armor split open exposing very bright CYAN-VIOLET chest weakpoint, arms hanging. Same scale, feet baseline90percent everycell, generous transparent separation, strict side-view facing left. Crisp detailed16bit pixelart matching reference. No scenery, no labels, no text, no HUD.",
+    "referenceAssets": [
+      "vecna.png"
+    ]
+  },
+  {
+    "asset": "public/assets/boss-devices.png",
+    "prompt": "Use case stylized-concept. Transparent production sprite atlas for an 80s StrangerThings horror retro platformer. Exactly FOUR equal width cells in ONE horizontal row, same foot baseline90percent. LEFT TO RIGHT: 1 ELECTRICAL PYLON charged, sturdy knee-to-head-height industrial transformer cabinet with copper coils blue electric arcs and obvious glowing cyan center; 2 SAME pylon overloaded broken open, orange sparks purple smoke and exposed wires, exact same silhouette/footprint; 3 stone and steel COVER PILLAR, weathered compact rectangular waist-high plinth with cracked 1980s concrete surface and black lab number plate, tall enough to crouch behind, flat top; 4 SAME cover pillar damaged with scars and red vine growth, exactsamefootprint. Highly detailed coherent16bit SNES pixelart matching dark horror game, sharp readable silhouette, generous clear margins. No background, NO floor strip, NO people, NO text labels, no layout lines.",
+    "referenceAssets": []
+  },
+  {
+    "asset": "public/assets/vecna-airwave.png",
+    "prompt": "Transparent VFX atlas for horror retro pixel game. EXACTLY FOUR equally sized cells ONE HORIZONTAL ROW of four animation frames for a magical projectile moving RIGHT. A narrow horizontal crimson psychic ENERGY WAVE with bright white-red leading crescent on the right and purple black smoke tail behind on the left, claw-like crackling red lightning and subtle ghostly skull wisps. Same silhouette size and centered vertical line in allcells, generous clear margins, no scenery no text no characters. It is a HIGH projectile to crouch under, not a ground wave. Detailed16bit pixelart notvector, red-violet sinister look. Transparent alpha.",
+    "referenceAssets": []
+  },
+  {
+    "asset": "public/assets/boss-cores.png",
+    "prompt": "Transparent gameplay weakpoint glow sprite atlas, exactly FOUR equally sized cells in ONE horizontal row, each centered with generous empty margin. LEFT TO RIGHT: 1 MindFlayer exposed core organ bright cyan-violet pulsing ring with fleshy red-black roots around edges, 2 SAME organ brighter pulse; 3 Vecna exposed chest weakpoint glowing cyan-violet cracked rib armor with small cyan center, 4 SAME chest core brighter pulse. Precise crisp16bit horror pixelart, readable bright cyan targets contrasted against red enemies, no bodies no words no scenery no background no layout lines. These overlays need same-size pulse pairs and pixel-perfect alignment.",
+    "referenceAssets": []
+  }
+]

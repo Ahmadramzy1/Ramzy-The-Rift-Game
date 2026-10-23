@@ -13,11 +13,14 @@ import {BILLY,billyCanAttack,molotovVelocity} from './billy';
 import {medkitPlacement} from './pickupPlacement';
 import {VECNA,vecnaLandingHits,takeVecnaHit} from './vecna';
 import {enemyCoinReward} from './rewards';
+import {BossDirector} from './BossDirector';
+import {preloadBossAssets,registerBossAssets} from './bossAssets';
 
-type Enemy = {index:number;sprite:Phaser.Physics.Arcade.Sprite;min:number;max:number;speed:number;kind:EnemyKind;baseY:number;phase:number;hp:number;maxHp:number;invulnerableUntil:number;aggro:boolean;alertAt:number;lastAttack:number;bar:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;controlledAt:number;liftY:number;target?:{x:number;y:number};leap?:{at:number;x:number;y:number;tx:number;ty:number};marker?:Phaser.GameObjects.Graphics;landedAt?:number};
+export type Enemy = {index:number;sprite:Phaser.Physics.Arcade.Sprite;min:number;max:number;speed:number;kind:EnemyKind;baseY:number;phase:number;hp:number;maxHp:number;invulnerableUntil:number;aggro:boolean;alertAt:number;lastAttack:number;bar:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;controlledAt:number;liftY:number;target?:{x:number;y:number};leap?:{at:number;x:number;y:number;tx:number;ty:number};marker?:Phaser.GameObjects.Graphics;landedAt?:number};
 const propKeys=['grass','stone','forest','metal','rift','floating','metal-platform','rift-platform','bush','rock','barrel','barricade','cone','log','fence','lamp','streetlamp','pole','wood-fence','tree','tower','drain','waterpipe','portal','sign','radio','tape','battery','keycard','heart','coin','mushroom','energy','medkit','key','vial'];
 
 export class GameScene extends Phaser.Scene {
+ bossDirector=new BossDirector(this);
  stageData!:Stage;player!:Phaser.Physics.Arcade.Sprite;solids!:Phaser.Physics.Arcade.StaticGroup;
  enemies:Enemy[]=[];state:PlayerState=initialState();status:Status='ready';
  keys!:Record<string,Phaser.Input.Keyboard.Key>;sky!:Phaser.GameObjects.TileSprite;fog!:Phaser.GameObjects.TileSprite;
@@ -40,6 +43,7 @@ export class GameScene extends Phaser.Scene {
  preload(){
   const base=import.meta.env.BASE_URL+'assets/';
   preloadEnvironments(this,base);
+  preloadBossAssets(this,base);
   this.load.spritesheet('hero',base+'hero.png',{frameWidth:96,frameHeight:112});
   for(const key of ['crawler','bloom','bat','slime','husk'])this.load.spritesheet(key,base+key+'.png',{frameWidth:128,frameHeight:112});
   propKeys.forEach(key=>this.load.image(key,base+key+'.png'));
@@ -55,6 +59,7 @@ export class GameScene extends Phaser.Scene {
   this.load.image('vecna-impact',base+'vecna-impact.png');
  }
  create(){
+  registerBossAssets(this);
   const bossTexture=this.textures.get('mindflayer'),cuts=[0,575,1094,1636,2172];
   for(let i=0;i<4;i++)bossTexture.add(i,0,cuts[i],0,cuts[i+1]-cuts[i],648);
   const billyTexture=this.textures.get('billy'),billyCuts=[0,543,1086,1614,2172];
@@ -103,6 +108,7 @@ export class GameScene extends Phaser.Scene {
 
  loadStage(index:number,area:'main'|'dungeon'='main',preserveRun=false){
   const previous={...this.state},previousElapsed=this.elapsed;
+  this.bossDirector.clear();
   if(!preserveRun){this.mainCoins.clear();this.mainRadios.clear();this.dungeonCoins.clear();this.mainKills.clear();this.dungeonKills.clear();this.consumedPickups.clear();this.dungeonCleared=false;this.mainCheckpoint=110;this.upgrades=loadCampaign();this.abilityCharges=1+this.loadout.extraCharges;this.nextDoubleJumpAt=0;this.multiplierCollected=false;this.bonusAwarded=false;this.killCoins=0;}
   this.area=area;
   this.physics.world.colliders.destroy();
@@ -175,12 +181,16 @@ export class GameScene extends Phaser.Scene {
    this.enemies.push({index:enemyIndex,sprite:enemy,min:e.min,max:e.max,speed:stats.speed,kind:e.kind,baseY:enemy.y,phase:e.x*.02,hp:stats.hp,maxHp:stats.hp,invulnerableUntil:0,aggro:false,alertAt:-10000,lastAttack:boss||billy||vecna?this.elapsed:-1000,bar,label,controlledAt:-1,liftY:enemy.y});
    this.physics.add.overlap(this.player,enemy,()=>this.encounter(enemy));
   }
+  for(const e of this.enemies)this.bossDirector.attach(e);
   this.physics.add.collider(this.bullets,this.solids,b=>b.destroy());
   this.physics.add.collider(this.hostileShots,this.solids,b=>{const shot=b as Phaser.Physics.Arcade.Image;if(shot.getData('molotov'))this.explodeMolotov(shot);else shot.destroy();});
   this.physics.add.overlap(this.bullets,this.enemyGroup,(bullet,enemy)=>{
    const shot=bullet as Phaser.Physics.Arcade.Image;
    const e=this.enemies.find(e=>e.sprite===enemy);if(!shot.active||!e||e.controlledAt>=0||e.hp<=0)return;
-   const damage=shot.getData('damage') as number;shot.destroy();this.hurtEnemy(e,damage,true);
+   const core=this.bossDirector.hitTargets(e).find(t=>t.kind==='core');
+   // Let a pellet cross the legacy outer body until it reaches the visible core.
+   if(core&&Math.hypot(shot.x-core.x,shot.y-core.y)>core.r)return;
+   const damage=shot.getData('damage') as number,point={x:shot.x,y:shot.y};shot.destroy();this.hurtEnemy(e,damage,true,point);
   });
   this.physics.add.overlap(this.player,this.hostileShots,(_player,obj)=>{const shot=obj as Phaser.Physics.Arcade.Image;if(this.status!=='playing'||!shot.active)return;const x=shot.x;if(shot.getData('molotov'))this.explodeMolotov(shot);else shot.destroy();this.damage(x);});
   this.portal=this.prop('portal',stage.exit,this.groundY(stage.exit),156,6);
@@ -269,7 +279,7 @@ export class GameScene extends Phaser.Scene {
   if(this.status!=='playing'||this.elapsed-this.lastShot<WEAPONS[this.equipped].cooldown||settings.menuOpen)return;
   this.lastShot=this.elapsed;const body=this.player.body as Phaser.Physics.Arcade.Body;
   const x=this.player.x,y=body.center.y;
-  if(targetX===undefined){const i=chooseTarget(x,y,this.enemies.map(e=>({x:e.sprite.x,y:e.sprite.y,alive:e.hp>0&&e.controlledAt<0})),WEAPONS.slingshot.range);targetX=i>=0?this.enemies[i].sprite.x:x+(this.player.flipX?-250:250);targetY=i>=0?this.enemies[i].sprite.y:y;}
+  if(targetX===undefined){const targets=this.enemies.map(e=>({...this.bossDirector.getHitPoint(e),alive:e.hp>0&&e.controlledAt<0&&e.sprite.active}));const i=chooseTarget(x,y,targets,WEAPONS.slingshot.range);targetX=i>=0?targets[i].x:x+(this.player.flipX?-250:250);targetY=i>=0?targets[i].y:y;}
   const angle=Math.atan2((targetY??y)-y,targetX-x);this.aimAngle=angle;this.player.setFlipX(Math.cos(angle)<0);
   if(this.equipped==='sword'){this.swordAngle=angle;this.player.setFlipX(Math.cos(angle)<0);this.swingStarted=this.elapsed;this.meleeHitDone=false;sound('shoot');return;}
   const stats=slingshotStats(this.upgrades.slingshotLevel);
@@ -285,8 +295,10 @@ export class GameScene extends Phaser.Scene {
   }
   this.burst(muzzleX,muzzleY,stats.fire?0xff8436:0xe6bc7e,4);sound('shoot');
  }
- hurtEnemy(enemy:Enemy,damage:number,projectile=false){
+ hurtEnemy(enemy:Enemy,damage:number,projectile=false,point?:{x:number;y:number},source?:'stomp'){
   if(enemy.hp<=0||enemy.controlledAt>=0)return;
+  damage=this.bossDirector.hit(enemy,damage,source??(projectile?'slingshot':'sword'),point);
+  if(damage<=0)return;
   // Each pellet is consumed on impact; both pellets in a volley may deal damage.
   const next=hitEnemy(projectile?{...enemy,invulnerableUntil:0}:enemy,damage,this.elapsed);if(next===enemy)return;
   enemy.hp=next.hp;enemy.invulnerableUntil=next.invulnerableUntil;
@@ -295,6 +307,7 @@ export class GameScene extends Phaser.Scene {
  }
  killEnemy(enemy:Enemy){
   if(!enemy.sprite.active)return;
+  this.bossDirector.remove(enemy);
   (this.area==='main'?this.mainKills:this.dungeonKills).add(enemy.index);
   enemy.hp=0;enemy.sprite.disableBody(true,true);enemy.bar.clear();enemy.label.setVisible(false);
   enemy.marker?.destroy();
@@ -305,17 +318,19 @@ export class GameScene extends Phaser.Scene {
  }
  activatePsi(){
   if(!this.state.abilityReady){this.notify('قدرت ذهنی این مرحله مصرف شده');return;}
-  const i=chooseTarget(this.player.x,this.player.y,this.enemies.map(e=>({x:e.sprite.x,y:e.sprite.y,alive:e.hp>0&&e.controlledAt<0&&e.sprite.active})),480);
+  const i=chooseTarget(this.player.x,this.player.y,this.enemies.map(e=>({x:e.sprite.x,y:e.sprite.y,alive:e.hp>0&&e.controlledAt<0&&e.sprite.active&&this.bossDirector.canPsi(e)})),480);
   this.state=useAbility(this.state,i>=0);if(i<0){this.notify('دشمنی در برد قدرت نیست');return;}
   this.abilityCharges--;this.state.abilityReady=this.abilityCharges>0;
-  const enemy=this.enemies[i];enemy.controlledAt=this.elapsed;enemy.liftY=enemy.sprite.y;
+  const enemy=this.enemies[i];if(this.bossDirector.psi(enemy)){sound('psi');this.emitHud();return;}enemy.controlledAt=this.elapsed;enemy.liftY=enemy.sprite.y;
   enemy.marker?.clear();
   const body=enemy.sprite.body as Phaser.Physics.Arcade.Body;body.setVelocity(0);body.enable=false;
   enemy.sprite.setTint(0xaf9aee);sound('psi');this.notify('کنترل ذهنی — اتصال برقرار شد');this.emitHud();
  }
  enemyBrain(e:Enemy,dt:number){
   if(!e.sprite.active)return;
-  if(e.controlledAt>=0){
+  if(this.bossDirector.encounters.has(e)){
+   this.bossDirector.updateEnemy(e,dt);
+  }else if(e.controlledAt>=0){
    const t=(this.elapsed-e.controlledAt)/1100;e.sprite.y=e.liftY-110*Math.min(1,t);e.sprite.rotation=Math.sin(t*20)*.06;
    this.psiBeam.lineStyle(2,0xc3a0ed,.7);this.psiBeam.lineBetween(this.player.x,this.player.y-16,e.sprite.x,e.sprite.y);this.psiBeam.lineStyle(1,0xead9ff,.6);this.psiBeam.strokeCircle(e.sprite.x,e.sprite.y,40+Math.sin(t*14)*8);
    if(t>=1.3){this.burst(e.sprite.x,e.sprite.y,0xb998f1,34);this.killEnemy(e);sound('psi');}
@@ -455,12 +470,12 @@ export class GameScene extends Phaser.Scene {
   if(info.kind==='vecna'&&info.leap)return;
   const body=this.player.body as Phaser.Physics.Arcade.Body;const eb=enemy.body as Phaser.Physics.Arcade.Body;
   if(isStomp(this.previousBottom,eb.top,body.velocity.y)){
-   this.player.setVelocityY(-360);this.jumpsUsed=1;this.hurtEnemy(info,2);this.emitHud();
+   this.player.setVelocityY(-360);this.jumpsUsed=1;this.hurtEnemy(info,2,false,undefined,'stomp');this.emitHud();
   }else this.damage(enemy.x);
  }
  damage(fromX:number,hearts=1){
   if(this.status!=='playing'||this.elapsed<this.state.invincibleUntil)return;
-  this.state=hearts===VECNA.damage?takeVecnaHit(this.state,this.elapsed):hearts===MIND_FLAYER.damage?takeWaveHit(this.state,this.elapsed):takeHit(this.state,this.elapsed);sound('hit');this.burst(this.player.x,this.player.y,0xdc5863,12);
+  this.state=hearts>=2?{...this.state,big:false,hearts:Math.max(0,this.state.hearts-hearts),invincibleUntil:this.elapsed+1800}:takeHit(this.state,this.elapsed);sound('hit');this.burst(this.player.x,this.player.y,0xdc5863,12);
   if(!settings.reducedMotion)this.cameras.main.shake(130,.003);
   this.knockUntil=this.elapsed+220;this.player.setVelocity(this.player.x<fromX?-180:180,-230);
   if(this.state.hearts<=0)this.die();this.emitHud();
@@ -528,6 +543,7 @@ export class GameScene extends Phaser.Scene {
   if(this.crouching){this.player.anims.stop();this.player.setFrame(11);}else this.player.play(anim,true);
   this.player.setScale(1);this.player.setAlpha(this.elapsed<this.state.invincibleUntil?.5+Math.sin(this.sceneTime*.014)*.2:1);
   this.psiBeam.clear();for(const enemy of this.enemies)this.enemyBrain(enemy,dt);this.updateShockwaves(dt,supported);if(this.status==='playing')this.updateFire();
+  this.bossDirector.updateEffects(dt,supported);
   this.impacts=this.impacts.filter(impact=>{const age=this.elapsed-impact.bornAt;if(age>=600){impact.art.destroy();return false;}impact.art.setFrame('blast-'+Math.min(3,Math.floor(age/140))).setAlpha(Math.min(1,(600-age)/150));return true;});
   if(this.status!=='playing')return;
   for(const group of [this.bullets,this.hostileShots])for(const obj of [...group.getChildren()]){
@@ -548,7 +564,7 @@ export class GameScene extends Phaser.Scene {
   const pose=weaponPose(this.equipped,this.player.x,body.top+13,body.center.y,facing,direction,swing,recoil,Number(this.player.frame.name),this.player.y);
   this.weapon.setPosition(pose.handX,pose.handY).setRotation(pose.rotation).setFlipX(facing<0).setAlpha(this.player.alpha);
   if(swinging){
-   if(!this.meleeHitDone&&swing>.26){this.meleeHitDone=true;for(const enemy of this.enemies)if(enemy.sprite.active&&enemy.controlledAt<0&&swordAimInRange(this.player.x,body.center.y,(enemy.sprite.body as Phaser.Physics.Arcade.Body).center.x,(enemy.sprite.body as Phaser.Physics.Arcade.Body).center.y,this.swordAngle))this.hurtEnemy(enemy,swordDamage(this.upgrades.swordLevel));}
+   if(!this.meleeHitDone&&swing>.26){this.meleeHitDone=true;for(const enemy of this.enemies){if(!enemy.sprite.active||enemy.controlledAt>=0)continue;const target=this.bossDirector.encounters.has(enemy)?this.bossDirector.getHitPoint(enemy):(enemy.sprite.body as Phaser.Physics.Arcade.Body).center;if(swordAimInRange(this.player.x,body.center.y,target.x,target.y,this.swordAngle))this.hurtEnemy(enemy,swordDamage(this.upgrades.swordLevel),false,{x:target.x,y:target.y});}}
   }
   const switchKey=!!pad?.buttons[4]?.pressed||touch.weapon;if(just('ONE'))this.equip('slingshot');if(just('TWO'))this.equip('sword');if(just('E')||(switchKey&&!this.switchHeld))this.equip(this.equipped==='sword'?'slingshot':'sword');this.switchHeld=switchKey;
   if(this.keys.F.isDown||touch.shoot||controls.shoot)this.fire();

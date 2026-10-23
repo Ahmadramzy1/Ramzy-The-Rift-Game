@@ -10,10 +10,10 @@ it('puts a 100 HP Vecna behind only four guards at the end of dungeon five',()=>
  expect(STAGES.slice(0,9).every(s=>s.enemies.every(e=>e.kind!=='vecna'))).toBe(true);expect(STAGES[9].enemies.filter(e=>e.kind==='vecna')).toHaveLength(2);expect(VECNA.interval).toBe(3000);
  expect(VECNA.aggroRange).toBeGreaterThan(640);expect(VECNA.firstLeapDelay).toBeLessThan(1500);
 });
-it('deals three hearts only inside the landing area and lets lateral movement or a high jump evade',()=>{
+it('deals two hearts only inside the landing area and lets lateral movement or a high jump evade',()=>{
  const body={left:190,right:215,top:350,bottom:418};
  expect(vecnaLandingHits(200,418,body)).toBe(true);
  expect(vecnaLandingHits(400,418,body)).toBe(false);
  expect(vecnaLandingHits(200,418,{...body,top:230,bottom:290})).toBe(false);
- const state={...initialState(),big:true},hit=takeVecnaHit(state,5000);expect(hit.hearts).toBe(0);expect(hit.lives).toBe(3);expect(takeVecnaHit(hit,5050)).toBe(hit);
+ const state={...initialState(),big:true},hit=takeVecnaHit(state,5000);expect(hit.hearts).toBe(1);expect(hit.lives).toBe(3);expect(takeVecnaHit(hit,5050)).toBe(hit);
 });
