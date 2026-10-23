@@ -15,8 +15,9 @@ import {VECNA,vecnaLandingHits,takeVecnaHit} from './vecna';
 import {enemyCoinReward} from './rewards';
 import {BossDirector} from './BossDirector';
 import {preloadBossAssets,registerBossAssets} from './bossAssets';
+import {startEnemyAction,actionMotion,type EnemyAction} from './enemyActions';
 
-export type Enemy = {index:number;sprite:Phaser.Physics.Arcade.Sprite;min:number;max:number;speed:number;kind:EnemyKind;baseY:number;phase:number;hp:number;maxHp:number;invulnerableUntil:number;aggro:boolean;alertAt:number;lastAttack:number;bar:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;controlledAt:number;liftY:number;target?:{x:number;y:number};leap?:{at:number;x:number;y:number;tx:number;ty:number};marker?:Phaser.GameObjects.Graphics;landedAt?:number};
+export type Enemy = {action?:EnemyAction;index:number;sprite:Phaser.Physics.Arcade.Sprite;min:number;max:number;speed:number;kind:EnemyKind;baseY:number;phase:number;hp:number;maxHp:number;invulnerableUntil:number;aggro:boolean;alertAt:number;lastAttack:number;bar:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;controlledAt:number;liftY:number;target?:{x:number;y:number};leap?:{at:number;x:number;y:number;tx:number;ty:number};marker?:Phaser.GameObjects.Graphics;landedAt?:number};
 const propKeys=['grass','stone','forest','metal','rift','floating','metal-platform','rift-platform','bush','rock','barrel','barricade','cone','log','fence','lamp','streetlamp','pole','wood-fence','tree','tower','drain','waterpipe','portal','sign','radio','tape','battery','keycard','heart','coin','mushroom','energy','medkit','key','vial'];
 
 export class GameScene extends Phaser.Scene {
@@ -45,6 +46,7 @@ export class GameScene extends Phaser.Scene {
   preloadEnvironments(this,base);
   preloadBossAssets(this,base);
   this.load.spritesheet('hero',base+'hero.png',{frameWidth:96,frameHeight:112});
+  for(const key of ['husk-jump','crawler-rush'])this.load.spritesheet(key,base+key+'.png',{frameWidth:128,frameHeight:112});
   for(const key of ['crawler','bloom','bat','slime','husk'])this.load.spritesheet(key,base+key+'.png',{frameWidth:128,frameHeight:112});
   propKeys.forEach(key=>this.load.image(key,base+key+'.png'));
   for(const tile of ['grass','stone','forest','metal','rift']){this.load.image(tile+'-fill',base+tile+'-fill.png');this.load.image(tile+'-tile',base+tile+'-tile.png');}
@@ -372,6 +374,20 @@ export class GameScene extends Phaser.Scene {
     }
    }
    if(e.kind!=='bat'&&(e.sprite.x<e.min||e.sprite.x>e.max)){e.sprite.x=Phaser.Math.Clamp(e.sprite.x,e.min,e.max);velocity=e.sprite.x<=e.min?Math.abs(e.speed):-Math.abs(e.speed);}
+   if(!e.action){
+    e.action=startEnemyAction({kind:e.kind,now:this.elapsed,lastAttack:e.lastAttack,grounded:eb.blocked.down||eb.touching.down,alerted:alerted&&this.elapsed-e.alertAt>380,dx,dy,speed:stats.speed})??undefined;
+    if(e.action){e.lastAttack=this.elapsed;e.sprite.anims.stop();}
+   }
+   if(e.action){
+    const move=actionMotion(e.action,this.elapsed,eb.blocked.down||eb.touching.down);
+    velocity=move.vx;
+    if(move.launch){e.sprite.setVelocityY(move.vy);e.action.launched=true;}
+    // Keep a committed attack inside the authored platform patrol bounds.
+    if((velocity<0&&e.sprite.x<=e.min+12)||(velocity>0&&e.sprite.x>=e.max-12)||eb.blocked.left||eb.blocked.right)velocity=0;
+    e.sprite.setTexture(e.kind==='husk'?'husk-jump':'crawler-rush',move.frame).setFlipX(e.action.direction<0);
+    if(move.frame===0)e.sprite.setTint(0xffb4a3);else e.sprite.clearTint();
+    if(move.done){delete e.action;e.sprite.clearTint().setTexture(e.kind,0).play(e.kind);}
+   }
    e.sprite.setVelocityX(velocity);if(velocity)e.sprite.setFlipX(velocity<0);
    if(e.kind==='bat'){
     const target=alerted?this.player.y+12:e.baseY+Math.sin(this.elapsed*.003+e.phase)*27;
@@ -473,9 +489,9 @@ export class GameScene extends Phaser.Scene {
    this.player.setVelocityY(-360);this.jumpsUsed=1;this.hurtEnemy(info,2,false,undefined,'stomp');this.emitHud();
   }else this.damage(enemy.x);
  }
- damage(fromX:number,hearts=1){
+ damage(fromX:number,hearts=1,forceHeartLoss=false){
   if(this.status!=='playing'||this.elapsed<this.state.invincibleUntil)return;
-  this.state=hearts>=2?{...this.state,big:false,hearts:Math.max(0,this.state.hearts-hearts),invincibleUntil:this.elapsed+1800}:takeHit(this.state,this.elapsed);sound('hit');this.burst(this.player.x,this.player.y,0xdc5863,12);
+  this.state=hearts>=2||forceHeartLoss?{...this.state,big:false,hearts:Math.max(0,this.state.hearts-hearts),invincibleUntil:this.elapsed+1800}:takeHit(this.state,this.elapsed);sound('hit');this.burst(this.player.x,this.player.y,0xdc5863,12);
   if(!settings.reducedMotion)this.cameras.main.shake(130,.003);
   this.knockUntil=this.elapsed+220;this.player.setVelocity(this.player.x<fromX?-180:180,-230);
   if(this.state.hearts<=0)this.die();this.emitHud();

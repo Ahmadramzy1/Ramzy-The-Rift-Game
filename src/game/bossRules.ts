@@ -53,6 +53,11 @@ export function mfCanTakeDamage(state:MFState,now:number):boolean {
  return state.mode==='exposed'&&now<state.until;
 }
 
+/** The planted hand is physical danger; the warning and severed remnant are safe. */
+export function mfArmTouchesPlayer(state:MFState,now:number,x:number,floor:number,body:{left:number;right:number;top:number;bottom:number}):boolean{
+ return state.mode==='stuck'&&now<state.until&&body.right>x-27&&body.left<x+27&&body.bottom>floor-105&&body.top<floor;
+}
+
 export type VecnaPhase=1|2|3;
 export type VecnaAttack='leap'|'low-wave'|'high-wave'|'psychic';
 export function phaseForHP(hpRatio:number):VecnaPhase {

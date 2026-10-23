@@ -1,0 +1,25 @@
+{
+  "mode": "built-in image_gen",
+  "prompts": [
+    {
+      "key": "mf-living",
+      "ref": "mf-phases.png",
+      "prompt": "Use case: stylized-concept. Reference image: preserve this exact red-black many-limbed horror boss, face and rib plates. Generate a transparent PRODUCTION ANIMATION SPRITE SHEET. EXACT 4 columns x 4 rows, 16 full-body sprites, consistent scale, ground baseline, camera and centered pelvis in each equal square cell. Read left to right in each row. Row1 FOUR sequential frames breathing idle LOOP: rib cage exhales/expands, head dips then rises, left/right tentacles coil organically in different directions. Row2 FOUR sequential frames aggressive raised arms LOOP, hands/fingers curl and head roars. Row3 FOUR sequential frames exposed cyan chest core pulsing LOOP, ribs spread, tendrils curl, head sways. Row4 FOUR sequential frames stunned recovery LOOP, head hangs and rises, severed limbs twitch and cyan chest pulses. Same creature in all16 frames; real redrawn changes in limb and head position, not identical copies or merely colors. Feet planted on same baseline85percent percell, generous empty margins above and sides. Strict side-view facing LEFT, detailed16bit pixel art matching reference. No background, scenery, floor, shadows, grid lines, text or labels. Preserve transparent alpha."
+    },
+    {
+      "key": "vecna-living",
+      "ref": "vecna-stances.png",
+      "prompt": "Use case: stylized-concept. Reference image: preserve exact pale bald root-covered humanoid Vecna identity, face, elongated claws and red-black vines. Transparent production sprite sheet, EXACT4columns x4rows,16fullbody poses, equal squarecells. Same body scale, planted feet at85percent height in eachcell; generous margins, no cropping, camera side-on facingLEFT. Row1 FOUR sequential idle breathing LOOP with shoulders rising/falling, neck turns subtly, dangling fingers independently curl, vines sway. Row2 FOUR sequential psychic channel LOOP, palm raised towardleft, elbow flexes, purpleenergy swirls, fingers articulate. Row3 FOUR sequential attack casting LOOP, arm extended left then hand lowered toward floor then recovering, torso flexes dynamically. Row4 FOUR sequential airborne leap/landing sequence: deep anticipation crouch, ascending knees tucked, descending claw raised, low impact landing. Same face/colors/proportions acrossall16. Actual animation poses redrawn distinctly, no duplicate sprites. Crisp detailed16bit retro horror pixelart matching input, not realistic photograph. No text, no scenery, no floor, no labels/grid, no cast shadow. Transparent alpha."
+    },
+    {
+      "key": "husk-jump",
+      "ref": "husk.png",
+      "prompt": "Use case stylized-concept. Reference image is the exact zombie enemy to match: angry orange eyes, short brown hair, red varsity vest, torn white sleeves, blue jeans, dark shoes. Transparent production sprite atlas EXACTLY4columns ONErow FOUR equal squarecells. FacingRIGHT sideview, same character scale and centered pelvis acrosscells. Four sequential jump action poses:1 deep crouch leaning forward preparing takeoff fistsback;2 rising jump knees tuck arms reaching forward;3 descending with both claws extended and bentknees;4 low landing legs spread hands low. Real clear silhouette changes. Allcontained with20percent margin, consistent pixelstyle darkoutlined detailed16bit matchingreference. Transparent background nofloor shadow text layoutlines scenery."
+    },
+    {
+      "key": "crawler-rush",
+      "ref": "crawler.png",
+      "prompt": "Use case stylized-concept. Reference is exact black crouched red-eyed crawling monster enemy. Preserve purpleblack musculature, long fingers, thin backward tendrils, bright redeyes. Transparent production sprite atlas EXACT4equal squarecells inONEhorizontalrow. Sideview facingRIGHT samebody scale and samegroundbaseline85percent. Four actionframes:1 attack anticipation shouldersback and haunchescompressed, claws digs into ground;2 explosive forward gallop forelegs outstretched hindlegs pushing;3 low stretched rapid pounce with clawsforward and tendrils streamback;4 braking recovery clawsplanted headlow backarched. Distinct coherent actual poses, generousmargins no cropping, crisp detailed16bitpixelart matchingreference, no scene floor shadow text orgrid."
+    }
+  ]
+}

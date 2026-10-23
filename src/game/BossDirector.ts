@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
+import {loopFrame} from './enemyActions';
 import {sound} from './bridge';
 import type {GameScene,Enemy} from './GameScene';
 import {buildBossArena,type BossArena} from './bossArenas';
-import {makeMF,tickMF,hitArm,psiMF,mfCanTakeDamage,mfAttackForCycle,makeVecnaWindow,exposeVecna,vecnaCanTakeDamage,phaseForHP,attackForCycle,vecnaCueMs,type MFState,type MFAttack,type VecnaWindow,type VecnaAttack,type VecnaPhase} from './bossRules';
+import {makeMF,tickMF,hitArm,mfArmTouchesPlayer,psiMF,mfCanTakeDamage,mfAttackForCycle,makeVecnaWindow,exposeVecna,vecnaCanTakeDamage,phaseForHP,attackForCycle,vecnaCueMs,type MFState,type MFAttack,type VecnaWindow,type VecnaAttack,type VecnaPhase} from './bossRules';
 
 type Point={x:number;y:number};
 type Device={x:number;y:number;readyAt:number;art:Phaser.GameObjects.Image};
@@ -80,13 +81,41 @@ export class BossDirector {
   const near=w.player.x>=c.arena.left-100&&w.player.x<=c.arena.right+100&&Math.abs(w.player.x-e.sprite.x)<1000;
   c.active=near||(c.kind==='vecna'&&!!c.flight);
   e.aggro=c.active;
-  if(!c.active){c.cue.clear();c.core.setVisible(false);if(c.kind==='mindflayer')c.arm.setVisible(false);return true;}
+  if(!c.active){c.cue.clear();c.core.setVisible(false);if(c.kind==='mindflayer')c.arm.setVisible(false);this.animateBody(e,c);return true;}
   e.sprite.setFlipX(w.player.x>e.sprite.x);
   const body=e.sprite.body as Phaser.Physics.Arcade.Body;
   body.setAllowGravity(false);e.sprite.setVelocity(0,0);
   if(c.kind==='mindflayer')this.updateMF(e,c,dt);
   else this.updateVecna(e,c,dt);
+  this.animateBody(e,c);
   return true;
+ }
+
+ private animateBody(e:Enemy,c:BossEncounter){
+  const now=this.world.elapsed,clock=now+e.phase*130;
+  const breath=Math.sin(clock*.004);
+  if(c.kind==='mindflayer'){
+   const open=c.active&&mfCanTakeDamage(c.state,now);
+   const row=!c.active?0:open?(Math.floor(clock/1100)%2?3:2):c.state.mode==='telegraph'?1:0;
+   c.stance.setTexture('mf-living',loopFrame(clock,row,row===1?110:155)).setOrigin(.5,240/256).setScale((136/171)*(1+breath*.009),(136/171)*(1-breath*.012));
+   // The rooted arm sways without shifting its target node or ground contact.
+   c.arm.setDisplaySize(124*(1+Math.sin(clock*.009)*.018),136);
+  }else{
+   const open=c.active&&vecnaCanTakeDamage(c.state,now);
+   if(open){
+    // Keep the authored exposed chest exactly over its tactical weak point.
+    c.stance.setTexture('vecna-stances',3).setOrigin(.5,1).setScale((204/582)*(1+breath*.006),(204/582)*(1-breath*.006));
+   }else{
+    let frame=loopFrame(clock,c.active&&c.attack==='psychic'?1:0,160);
+    if(c.flight){const t=Math.min(1,(now-c.flight.at)/850);frame=12+(t<.14?0:t<.48?1:t<.86?2:3);}
+    else if(c.active&&c.attack==='leap')frame=12;
+    else if(c.active&&c.attack==='high-wave')frame=Math.floor(clock/140)%2===0?8:11;
+    else if(c.active&&c.attack==='low-wave')frame=9+Math.floor(clock/140)%2;
+    c.stance.setTexture('vecna-living',frame).setOrigin(.5,240/256).setScale((204/229)*(1+breath*.007),(204/229)*(1-breath*.009));
+   }
+  }
+  c.stance.setPosition(e.sprite.x,c.kind==='mindflayer'?c.arena.floor:e.sprite.y).setFlipX(e.sprite.flipX);
+  if(now<e.invulnerableUntil)c.stance.setTint(0xffd5d1);else c.stance.clearTint();
  }
 
  private updateMF(e:Enemy,c:MFEncounter,_dt:number){
@@ -211,7 +240,8 @@ export class BossDirector {
   // Arm nodes sit outside the legacy boss collider. Consume these projectiles
   // here; the host owns HP damage and normal body projectile collisions.
   for(const [e,c] of this.encounters){
-   if(c.kind!=='mindflayer'||c.state.mode!=='stuck'||now>=c.state.until)continue;
+   if(c.kind!=='mindflayer'||!c.active||c.state.mode!=='stuck'||now>=c.state.until)continue;
+   if(mfArmTouchesPlayer(c.state,now,c.armPoint.x,c.arena.floor,pb))w.damage(c.armPoint.x,1,true);
    for(const obj of [...w.bullets.getChildren()]){
     const shot=obj as Phaser.Physics.Arcade.Image;
     if(!shot.active||Math.abs(shot.x-c.armPoint.x)>44||Math.abs(shot.y-c.armPoint.y)>42)continue;

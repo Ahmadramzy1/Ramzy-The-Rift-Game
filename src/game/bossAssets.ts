@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 export const BOSS_ASSETS=['mf-phases','mf-arm','vecna-stances','boss-devices','vecna-airwave','boss-cores'] as const;
-export function preloadBossAssets(scene:Phaser.Scene,base:string){for(const key of BOSS_ASSETS)scene.load.image(key,base+key+'.png');}
+export function preloadBossAssets(scene:Phaser.Scene,base:string){
+ for(const key of BOSS_ASSETS)scene.load.image(key,base+key+'.png');
+ for(const key of ['mf-living','vecna-living'])scene.load.spritesheet(key,base+key+'.png',{frameWidth:256,frameHeight:256});
+}
 /** Measured frame boxes preserve alpha and ground baselines. */
 export function registerBossAssets(scene:Phaser.Scene){
  for(const key of BOSS_ASSETS){

@@ -23,3 +23,4 @@ await access(path.join(root,'assets/vecna-impact.png'));
 for(const key of ['mf-phases','mf-arm','vecna-stances','boss-devices','vecna-airwave','boss-cores'])await access(path.join(root,'assets',key+'.png'));
 for(const file of ['runaway-bon-jovi.m4a','rock-you-like-a-hurricane.mp3','every-breath-you-take.mp3','running-up-that-hill.m4a','should-i-stay-or-should-i-go.m4a','heroes-david-bowie.m4a'])await access(path.join(root,'audio',file));
 console.log('Pages entry, fonts, sprites, ten paired environment atlases, soundtrack and cinematic verified.');
+for(const key of ['mf-living','vecna-living','husk-jump','crawler-rush'])await access(path.join(root,'assets',key+'.png'));
