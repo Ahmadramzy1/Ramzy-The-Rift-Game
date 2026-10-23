@@ -13,14 +13,14 @@ export type Stage = {
 const themes = [
  ['محلهٔ خاموش','Quiet neighborhood','سیگنال از آن سوی شهر می‌آید.','grass',0xc63e51],
  ['لبهٔ جنگل','Forest edge','میان درخت‌ها، چیزی بیدار است.','forest',0x33978f],
- ['خیابان آرکید','Arcade street','آخرین دستگاه هنوز روشن است.','stone',0xaa4fa8],
- ['مدرسهٔ متروک','The school','زنگ آخر، سال‌ها پیش به صدا درآمد.','stone',0xc8915c],
+ ['کلوب آرکید پالاس','Palace Arcade interior','آخرین دستگاه هنوز روشن است.','stone',0xaa4fa8],
+ ['راهروی مدرسهٔ هاوکینز','Hawkins Middle corridor','زنگ آخر، سال‌ها پیش به صدا درآمد.','stone',0xc8915c],
  ['معدن متروک','The quarry','هرچه پایین‌تر، سیگنال قوی‌تر.','grass',0xb17448],
  ['محوطهٔ آزمایشگاه','Laboratory exterior','پشت حصار، پاسخ منتظر است.','metal',0x4aa5bc],
  ['تونل‌های زیرزمینی','Underground tunnels','راه برگشت را به خاطر بسپار.','forest',0x4c9eaa],
- ['بعد دیگر','The other side','شهری آشنا، با قوانینی دیگر.','rift',0xa339b8],
- ['طوفان پورتال','Portal storm','شکاف‌ها به یکدیگر نزدیک می‌شوند.','rift',0x865de7],
- ['دروازهٔ نهایی','The final gate','سیگنال را خاموش کن. به خانه برگرد.','metal',0xe14655]
+ ['خانهٔ کریل','Creel House','شهری آشنا، با قوانینی دیگر.','rift',0xa339b8],
+ ['ویرانه‌های استارکورت','Starcourt Mall ruins','شکاف‌ها به یکدیگر نزدیک می‌شوند.','rift',0x865de7],
+ ['هستهٔ آزمایشگاه','Rainbow Room / Lab Core','سیگنال را خاموش کن. به خانه برگرد.','metal',0xe14655]
 ] as const;
 
 // Each list is an original, hand-authored route. [x, top, width] in world pixels.

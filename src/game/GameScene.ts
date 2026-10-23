@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import {preloadEnvironments,drawEnvironment,drawSurface} from './environments';
 import { STAGES, DUNGEONS, type Stage, type EnemyKind } from './levels';
 import { PHYSICS, advanceVelocity, cutJump, isStomp, takeHit, checkpointRespawn, initialState, type PlayerState } from './mechanics';
 import { commands, updates, touch, settings, sound, type Status } from './bridge';
@@ -36,6 +37,7 @@ export class GameScene extends Phaser.Scene {
  constructor(){super('world');}
  preload(){
   const base=import.meta.env.BASE_URL+'assets/';
+  preloadEnvironments(this,base);
   this.load.spritesheet('hero',base+'hero.png',{frameWidth:96,frameHeight:112});
   for(const key of ['crawler','bloom','bat','slime','husk'])this.load.spritesheet(key,base+key+'.png',{frameWidth:128,frameHeight:112});
   propKeys.forEach(key=>this.load.image(key,base+key+'.png'));
@@ -104,44 +106,21 @@ export class GameScene extends Phaser.Scene {
   const stage=this.stageData;const cam=this.cameras.main;
   const renderScale=this.scale.width/960;this.screenOffsetX=(this.scale.width-960)/2;this.screenOffsetY=(this.scale.height-540)/2;
   cam.resetFX();cam.setZoom(renderScale);cam.setBounds(0,0,stage.width,540);cam.setScroll(-this.screenOffsetX,-this.screenOffsetY);cam.setBackgroundColor('#0d1528');
-  this.sky=this.add.tileSprite(0,0,960,395,'sky').setOrigin(0).setScrollFactor(0).setDepth(-30).setAlpha(.82).setTileScale(1.65);
-  this.add.rectangle(480,285,960,510,0x101d2d,.3).setScrollFactor(0).setDepth(-29);
-  this.halo=this.add.circle(760,110,65,stage.color,.09).setScrollFactor(.04).setDepth(-28);
-  this.tweens.add({targets:this.halo,scale:1.45,alpha:.19,duration:3300,yoyo:true,repeat:-1});
-  // Three independent scenery planes behind real collidable terrain.
-  const forest=this.add.graphics().setDepth(-20).setScrollFactor(.35);
-  for(let x=-100;x<stage.width+100;x+=59){
-   const h=85+(Math.sin(x*2.31)+1)*62;
-   forest.fillStyle(0x102333,.95);forest.fillTriangle(x,420-h,x-35,430,x+35,430);forest.fillRect(x-4,410,8,70);
-  }
-  const back=this.add.graphics().setDepth(-21).setScrollFactor(.18);
-  for(let x=-150;x<4000;x+=110){back.fillStyle(0x1b2b43,.7);back.fillTriangle(x,230+(Math.cos(x)*38),x-100,420,x+120,420);}
-  this.drawLandmarks();
-  for(let x=110;x<stage.width;x+=390)this.add.image(x,465,'tree').setOrigin(.5,1).setDisplaySize(130,225).setAlpha(.4).setScrollFactor(.65).setDepth(-15).setTint(0x2b5368);
+  // Retain the atmospheric plane used by update; location imagery never tiles or drifts.
+  this.sky=this.add.tileSprite(0,0,960,540,'sky').setOrigin(0).setScrollFactor(0).setDepth(-40).setAlpha(.15);
+  drawEnvironment(this,stage,area==='dungeon',settings.reducedMotion);
+  this.halo=this.add.circle(760,110,65,stage.color,.035).setScrollFactor(0).setDepth(-32);
+  if(!settings.reducedMotion)this.tweens.add({targets:this.halo,alpha:.08,duration:3300,yoyo:true,repeat:-1});
   this.makeFog();
   this.solids=this.physics.add.staticGroup();
   for(const p of [...stage.platforms,...stage.ceilings]){
    const collider=this.add.rectangle(p.x+p.w/2,p.y+14,p.w,28,0x000000,0);
    this.physics.add.existing(collider,true);this.solids.add(collider);
-   const ceiling=stage.ceilings.includes(p);const kind=('kind' in p)?p.kind:undefined;
-   const tile=ceiling?'metal-platform':kind?(stage.tile==='metal'?'metal-platform':stage.tile==='rift'?'rift-platform':'floating'):stage.tile;
-   for(let x=p.x;x<p.x+p.w;x+=64){
-    const width=Math.min(64,p.x+p.w-x);
-    const meta=this.cache.json.get('terrain')[stage.tile] as {surfaceOffset:number;height:number};
-    this.add.image(x,ceiling||kind?p.y-3:p.y-meta.surfaceOffset,ceiling||kind?tile:stage.tile+'-tile').setOrigin(0).setDisplaySize(width,ceiling?28:kind?42:meta.height).setDepth(1);
-    if(!kind&&!ceiling){
-     this.add.rectangle(x+width/2,p.y+108,width,90,0x111a20).setDepth(0);
-     this.add.image(x,p.y+meta.height-meta.surfaceOffset-2,stage.tile+'-fill').setOrigin(0).setDisplaySize(width,90).setTint(0x455066).setDepth(1);
-    }
-   }
+   drawSurface(this,stage,p,stage.ceilings.includes(p),area==='dungeon');
   }
-  stage.decor.forEach(d=>this.prop(d.key,d.x,d.y,d.size,-2));
-  this.prop('bush',230,458,84,3);this.prop('sign',55,458,116,-1);
-  if(stage.id===1&&area==='main'){this.prop('streetlamp',285,458,212,-2);this.prop('barricade',2800,458,80,-1);}
   const doorX=area==='main'?stage.dungeonX:80;this.prop('drain',doorX,this.groundY(doorX),125,2).setTint(area==='dungeon'?0x9e84b8:0xffffff);
   this.add.text(doorX,this.groundY(doorX)-143,area==='main'?(this.dungeonCleared?'DUNGEON CLEAR':'DUNGEON / ↓'):'RETURN / ↑ ↓',{fontFamily:'monospace',fontSize:'12px',color:'#d4b2ee',stroke:'#101020',strokeThickness:3}).setOrigin(.5).setDepth(5);
-  if(area==='dungeon'){this.sky.setTint(0x48315e).setAlpha(.45);this.fog.setTint(0x8b4da1);}
-  if(stage.id>=5){this.prop('tower',200,458,210,-2);this.prop('barrel',1030,458,58,2);}
+  if(area==='dungeon'){this.sky.setTint(0x48315e);this.fog.setTint(0x8b4da1);}
   this.checkpoint=this.prop('radio',stage.checkpoint,this.groundY(stage.checkpoint),56,3).setTint(0x96b3bd);
   const cp=this.add.zone(stage.checkpoint,this.groundY(stage.checkpoint)-42,55,84);
   this.physics.add.existing(cp,true);
@@ -205,7 +184,7 @@ export class GameScene extends Phaser.Scene {
    this.motes.push({obj,speed:8+i%9,phase:i});
   }
   // Soft lightning with no full-screen flashes. Disabled by reduced motion.
-  if(!settings.reducedMotion)this.time.addEvent({delay:8200,loop:true,callback:()=>{
+  if(!settings.reducedMotion&&(area==='dungeon'||stage.id===9))this.time.addEvent({delay:8200,loop:true,callback:()=>{
    const g=this.add.graphics().setPosition(this.screenOffsetX,this.screenOffsetY).setDepth(-24).setScrollFactor(0);g.lineStyle(2,stage.color,.45);g.beginPath();g.moveTo(720,0);g.lineTo(690,65);g.lineTo(713,61);g.lineTo(670,150);g.strokePath();
    this.tweens.add({targets:g,alpha:0,duration:900,onComplete:()=>g.destroy()});
   }});
@@ -227,23 +206,6 @@ export class GameScene extends Phaser.Scene {
   this.notify(cleared?'دانجن پاک شد؛ برای ثبت سه ستاره به انتهای مرحله برس.':'بازگشت به مسیر اصلی؛ دانجن هنوز پاک نشده.');
  }
  groundY(x:number){return this.stageData.platforms.find(p=>!p.kind&&x>=p.x&&x<=p.x+p.w)?.y??458;}
- drawLandmarks(){
-  const id=this.stageData.id,g=this.add.graphics().setDepth(-16).setScrollFactor(.8);
-  if(id===1){
-   for(const x of [460,1280,2400]){g.fillStyle(0x253647);g.fillRect(x,330,140,120);g.fillStyle(0x162534);g.fillTriangle(x-15,332,x+70,273,x+155,332);g.fillStyle(0xb78954,.5);for(const dx of [20,88])g.fillRect(x+dx,355,25,31);g.fillStyle(0x162534);g.fillRect(x+58,393,26,57);}
-  }else if(id===3||id===4){
-   const x=590;g.fillStyle(id===3?0x312943:0x3b3540);g.fillRect(x,238,285,211);g.fillStyle(0x151e2b);g.fillRect(x-12,226,309,16);
-   for(let row=0;row<2;row++)for(let col=0;col<5;col++){g.fillStyle((row+col)%3===0?0x97675f:0x3f5266,.75);g.fillRect(x+21+col*53,271+row*65,26,35);}
-   g.fillStyle(0x111d2b);g.fillRect(x+122,377,42,72);
-   if(id===4){g.fillStyle(0x3b3540);g.fillRect(x+110,169,67,69);g.fillStyle(0xceb88a,.6);g.fillCircle(x+143,199,19);g.lineStyle(2,0x2b2430);g.lineBetween(x+143,199,x+143,184);g.lineBetween(x+143,199,x+154,204);}
-   this.add.text(x+142,249,id===3?'ARCADE':'PINECREST HIGH',{fontFamily:'monospace',fontSize:id===3?'22px':'12px',fontStyle:'bold',color:id===3?'#bf75aa':'#a59994',stroke:'#152030',strokeThickness:4}).setOrigin(.5).setScrollFactor(.8).setDepth(-15);
-  }else if(id===5||id===7){
-   for(let x=0;x<3500;x+=180){this.add.image(x,450,'rock').setDisplaySize(200,140+(x%100)).setOrigin(.5,1).setTint(0x426077).setDepth(-17).setScrollFactor(.8);}
-   if(id===7){g.fillStyle(0x0a101a,.85);g.fillRect(0,0,3500,90);for(let x=0;x<3500;x+=95)g.fillTriangle(x,85,x+60,85,x+35,160);}
-  }else if(id>=6){
-   for(const x of [500,1460,2420]){g.fillStyle(id>=8?0x302340:0x253543);g.fillRect(x,285,250,165);g.fillStyle(0x15212d);g.fillRect(x-10,274,270,14);g.fillStyle(this.stageData.color,.55);for(let j=0;j<4;j++)g.fillRect(x+24+j*58,311,28,14);this.prop('tower',x+180,450,210,-16).setScrollFactor(.8).setTint(id>=8?0x9a5d9d:0x8aa9b9);}
-  }
- }
  prop(key:string,x:number,y:number,height:number,depth=1){const img=this.add.image(x,y,key).setOrigin(.5,1).setDepth(depth);img.setScale(height/img.height);return img;}
  makeFog(){
   if(!this.textures.exists('fog')){const canvas=this.textures.createCanvas('fog',512,128)!;const ctx=canvas.context;const grad=ctx.createLinearGradient(0,0,0,128);grad.addColorStop(0,'rgba(54,100,133,0)');grad.addColorStop(.6,'rgba(54,100,133,.20)');grad.addColorStop(1,'rgba(54,100,133,0)');ctx.fillStyle=grad;ctx.fillRect(0,0,512,128);canvas.refresh();}

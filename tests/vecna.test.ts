@@ -3,9 +3,9 @@ import {VECNA,vecnaLandingHits,takeVecnaHit} from '../src/game/vecna';
 import {DUNGEONS,STAGES} from '../src/game/levels';
 import {enemyStats} from '../src/game/combat';
 import {initialState} from '../src/game/mechanics';
-it('puts a ten HP Vecna behind only four guards at the end of dungeon five',()=>{
+it('puts a 100 HP Vecna behind only four guards at the end of dungeon five',()=>{
  const d=DUNGEONS[4];expect(d.enemies).toHaveLength(5);const boss=d.enemies.find(e=>e.kind==='vecna')!;
- expect(boss.x).toBeGreaterThan(1900);expect(enemyStats('vecna',10).hp).toBe(10);
+ expect(boss.x).toBeGreaterThan(1900);expect(enemyStats('vecna',10).hp).toBe(100);expect(VECNA.hp).toBe(100);
  expect(DUNGEONS.filter(s=>s.enemies.some(e=>e.kind==='vecna')).map(s=>s.id)).toEqual([5]);
  expect(STAGES.every(s=>s.enemies.every(e=>e.kind!=='vecna'))).toBe(true);expect(VECNA.interval).toBe(3000);
 });
