@@ -1,5 +1,5 @@
 export type Platform = {x:number;y:number;w:number;kind?:string};
-export type EnemyKind = 'crawler'|'bat'|'slime'|'husk'|'bloom'|'mindflayer'|'billy';
+export type EnemyKind = 'crawler'|'bat'|'slime'|'husk'|'bloom'|'mindflayer'|'billy'|'vecna';
 export function enemyFamilies(stage:number):EnemyKind[]{
  return stage<2?['crawler']:stage<3?['crawler','bat']:stage<6?['crawler','bat','husk','slime']:['crawler','bat','husk','slime','bloom'];
 }
@@ -62,9 +62,14 @@ export const DUNGEONS:Stage[]=STAGES.map((main,i)=>{
  const families=enemyFamilies(i+1);
  const count=3+Math.floor(i/2);
  const enemies=platforms.flatMap((p,j)=>Array.from({length:count},(_,k)=>({x:p.x+(j===0?220:70)+k*(p.w-(j===0?260:140))/Math.max(1,count-1),y:p.y,kind:families[(i+j+k)%families.length],min:p.x+(j===0?195:40),max:p.x+p.w-40})));
+ if(i===4){
+  const guards=platforms.slice(0,3).map((p,j)=>({x:p.x+(j===0?235:p.w*.55),y:p.y,kind:families[j],min:p.x+(j===0?195:40),max:p.x+p.w-40}));
+  guards.push({x:345,y:platforms[0].y,kind:families[3],min:220,max:390});
+  enemies.splice(0,enemies.length,...guards,{x:1980,y:418,kind:'vecna',min:1675,max:2135});
+ }
  // Alternate four/five evenly spaced coins per platform: 18 total, up from 12.
  const coins=platforms.flatMap((p,j)=>Array.from({length:4+j%2},(_,k)=>({x:p.x+p.w*(k+1)/(5+j%2),y:p.y-85})));
- return {...main,name:'دانجن '+main.name,english:main.english+' / Dungeon',subtitle:'همهٔ دشمن‌ها را شکست بده تا دروازه باز شود.',tile:'rift',color:0x9954c9,width:2230,exit:2110,checkpoint:80,dungeonX:80,platforms,enemies,coins,tapes:[],power:{x:1450,y:350},decor:platforms.map(p=>({x:p.x+p.w*.5,y:p.y,key:'rock',size:100})),hazards:platforms.slice(1).map(p=>({x:p.x+p.w*.64,y:p.y,w:25+Math.min(i*2,18)})),ceilings:i>2?[{x:1120,y:382,w:110}]:[]};
+ return {...main,name:'دانجن '+main.name,english:main.english+' / Dungeon',subtitle:'همهٔ دشمن‌ها را شکست بده تا دروازه باز شود.',tile:'rift',color:0x9954c9,width:2230,exit:2110,checkpoint:80,dungeonX:80,platforms,enemies,coins,tapes:[],power:{x:1450,y:350},decor:platforms.map(p=>({x:p.x+p.w*.5,y:p.y,key:'rock',size:100})),hazards:platforms.slice(1).filter(p=>i!==4||p!==platforms[3]).map(p=>({x:p.x+p.w*.64,y:p.y,w:25+Math.min(i*2,18)})),ceilings:i>2?[{x:1120,y:382,w:110}]:[]};
 });
 
 /** Conservative ballistic reachability graph. 1px horizontal sampling of a full

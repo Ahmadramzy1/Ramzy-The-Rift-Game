@@ -10,8 +10,9 @@ import {weaponPose} from './weaponPose';
 import {MIND_FLAYER,waveHitsPlayer,takeWaveHit} from './mindFlayer';
 import {BILLY,billyCanAttack,molotovVelocity} from './billy';
 import {medkitPlacement} from './pickupPlacement';
+import {VECNA,vecnaLandingHits,takeVecnaHit} from './vecna';
 
-type Enemy = {index:number;sprite:Phaser.Physics.Arcade.Sprite;min:number;max:number;speed:number;kind:EnemyKind;baseY:number;phase:number;hp:number;maxHp:number;invulnerableUntil:number;aggro:boolean;alertAt:number;lastAttack:number;bar:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;controlledAt:number;liftY:number};
+type Enemy = {index:number;sprite:Phaser.Physics.Arcade.Sprite;min:number;max:number;speed:number;kind:EnemyKind;baseY:number;phase:number;hp:number;maxHp:number;invulnerableUntil:number;aggro:boolean;alertAt:number;lastAttack:number;bar:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;controlledAt:number;liftY:number;target?:{x:number;y:number};leap?:{at:number;x:number;y:number;tx:number;ty:number};marker?:Phaser.GameObjects.Graphics;landedAt?:number};
 const propKeys=['grass','stone','forest','metal','rift','floating','metal-platform','rift-platform','bush','rock','barrel','barricade','cone','log','fence','lamp','streetlamp','pole','wood-fence','tree','tower','drain','waterpipe','portal','sign','radio','tape','battery','keycard','heart','coin','mushroom','energy','medkit','key','vial'];
 
 export class GameScene extends Phaser.Scene {
@@ -46,6 +47,7 @@ export class GameScene extends Phaser.Scene {
   this.load.image('mindflayer',base+'mind-flayer.png');
   this.load.image('billy',base+'billy-wheelchair.png');
   this.load.image('shockwave',base+'psychic-shockwave.png');
+  this.load.image('vecna',base+'vecna.png');
  }
  create(){
   const bossTexture=this.textures.get('mindflayer'),cuts=[0,575,1094,1636,2172];
@@ -54,6 +56,8 @@ export class GameScene extends Phaser.Scene {
   for(let i=0;i<4;i++)billyTexture.add(i,0,billyCuts[i],0,billyCuts[i+1]-billyCuts[i],724);
   const waveTexture=this.textures.get('shockwave'),waveSource=waveTexture.getSourceImage() as HTMLImageElement;
   for(let i=0;i<4;i++){const left=Math.round(i*waveSource.width/4),right=Math.round((i+1)*waveSource.width/4);waveTexture.add(i,0,left,150,right-left,360);}
+  const vecnaTexture=this.textures.get('vecna'),vecnaCuts=[0,510,1100,1532,2171];
+  for(let i=0;i<4;i++)vecnaTexture.add(i,0,vecnaCuts[i],0,vecnaCuts[i+1]-vecnaCuts[i],724);
   const spriteAnims:Record<string,{key:string;frames:number[];rate:number}>={
    idle:{key:'hero',frames:[0,0,0,15,0,0],rate:3},walk:{key:'hero',frames:[1,2,3,4],rate:9},run:{key:'hero',frames:[5,6,7],rate:13},
    jump:{key:'hero',frames:[8,9],rate:5},fall:{key:'hero',frames:[10,9],rate:5},hurt:{key:'hero',frames:[12,13],rate:7},
@@ -168,17 +172,18 @@ export class GameScene extends Phaser.Scene {
   this.psiBeam=this.add.graphics().setDepth(14);
   for(const [enemyIndex,e] of stage.enemies.entries()){
    if((this.area==='main'?this.mainKills:this.dungeonKills).has(enemyIndex))continue;
-   const flying=e.kind==='bat',boss=e.kind==='mindflayer',billy=e.kind==='billy';
-   const enemy=this.physics.add.sprite(e.x,boss||billy?e.y:e.y-(flying?160:48),e.kind,0).setDepth(8);
+   const flying=e.kind==='bat',boss=e.kind==='mindflayer',billy=e.kind==='billy',vecna=e.kind==='vecna';
+   const enemy=this.physics.add.sprite(e.x,boss||billy||vecna?e.y:e.y-(flying?160:48),e.kind,0).setDepth(8);
    this.enemyGroup.add(enemy);
    if(boss){enemy.setOrigin(.5,636/648).setScale(136/386).setSize(enemy.width*.48,enemy.height*.5).setOffset(enemy.width*.26,636-enemy.height*.5);}
    else if(billy)enemy.setOrigin(.5,695/724).setScale(80/646).setSize(enemy.width*.62,470).setOffset(enemy.width*.19,225).setImmovable(true);
+   else if(vecna)enemy.setOrigin(.5,678/724).setScale(204/554).setSize(enemy.width*.4,450).setOffset(enemy.width*.3,228).setImmovable(true);
    else enemy.setScale(flying?.69:.72).setSize(68,48).setOffset(29,56);
-   const body=enemy.body as Phaser.Physics.Arcade.Body;body.setAllowGravity(!flying&&!billy);
-   if(!boss&&!billy)enemy.play(e.kind);if(!flying&&!billy)this.physics.add.collider(enemy,this.solids);
+   const body=enemy.body as Phaser.Physics.Arcade.Body;body.setAllowGravity(!flying&&!billy&&!vecna);
+   if(!boss&&!billy&&!vecna)enemy.play(e.kind);if(!flying&&!billy&&!vecna)this.physics.add.collider(enemy,this.solids);
    const stats=enemyStats(e.kind,stage.id+(this.area==='dungeon'?5:0));
    const bar=this.add.graphics().setDepth(12);const label=this.add.text(enemy.x,enemy.y-56,stats.hp+'/'+stats.hp,{fontFamily:'monospace',fontSize:'9px',color:'#d7dfd9',stroke:'#0c1018',strokeThickness:3}).setOrigin(.5).setDepth(12);
-   this.enemies.push({index:enemyIndex,sprite:enemy,min:e.min,max:e.max,speed:stats.speed,kind:e.kind,baseY:enemy.y,phase:e.x*.02,hp:stats.hp,maxHp:stats.hp,invulnerableUntil:0,aggro:false,alertAt:-10000,lastAttack:boss||billy?this.elapsed:-1000,bar,label,controlledAt:-1,liftY:enemy.y});
+   this.enemies.push({index:enemyIndex,sprite:enemy,min:e.min,max:e.max,speed:stats.speed,kind:e.kind,baseY:enemy.y,phase:e.x*.02,hp:stats.hp,maxHp:stats.hp,invulnerableUntil:0,aggro:false,alertAt:-10000,lastAttack:boss||billy||vecna?this.elapsed:-1000,bar,label,controlledAt:-1,liftY:enemy.y});
    this.physics.add.overlap(this.player,enemy,()=>this.encounter(enemy));
   }
   this.physics.add.collider(this.bullets,this.solids,b=>b.destroy());
@@ -320,6 +325,7 @@ export class GameScene extends Phaser.Scene {
   if(!enemy.sprite.active)return;
   (this.area==='main'?this.mainKills:this.dungeonKills).add(enemy.index);
   enemy.hp=0;enemy.sprite.disableBody(true,true);enemy.bar.clear();enemy.label.setVisible(false);
+  enemy.marker?.destroy();
   if(this.area==='dungeon'&&this.enemies.every(e=>!e.sprite.active||e.hp<=0))this.bonusCoin?.setVisible(true);
   this.state.score+=200+enemy.maxHp*50;this.pop('+'+(200+enemy.maxHp*50),enemy.sprite.x,enemy.sprite.y-30);this.burst(enemy.sprite.x,enemy.sprite.y,0xe4886b,18);this.emitHud();
  }
@@ -329,6 +335,7 @@ export class GameScene extends Phaser.Scene {
   this.state=useAbility(this.state,i>=0);if(i<0){this.notify('دشمنی در برد قدرت نیست');return;}
   this.abilityCharges--;this.state.abilityReady=this.abilityCharges>0;
   const enemy=this.enemies[i];enemy.controlledAt=this.elapsed;enemy.liftY=enemy.sprite.y;
+  enemy.marker?.clear();
   const body=enemy.sprite.body as Phaser.Physics.Arcade.Body;body.setVelocity(0);body.enable=false;
   enemy.sprite.setTint(0xaf9aee);sound('psi');this.notify('کنترل ذهنی — اتصال برقرار شد');this.emitHud();
  }
@@ -338,6 +345,8 @@ export class GameScene extends Phaser.Scene {
    const t=(this.elapsed-e.controlledAt)/1100;e.sprite.y=e.liftY-110*Math.min(1,t);e.sprite.rotation=Math.sin(t*20)*.06;
    this.psiBeam.lineStyle(2,0xc3a0ed,.7);this.psiBeam.lineBetween(this.player.x,this.player.y-16,e.sprite.x,e.sprite.y);this.psiBeam.lineStyle(1,0xead9ff,.6);this.psiBeam.strokeCircle(e.sprite.x,e.sprite.y,40+Math.sin(t*14)*8);
    if(t>=1.3){this.burst(e.sprite.x,e.sprite.y,0xb998f1,34);this.killEnemy(e);sound('psi');}
+  }else if(e.kind==='vecna'){
+   this.vecnaBrain(e);
   }else if(e.kind==='billy'){
    const pb=this.player.body as Phaser.Physics.Arcade.Body,dx=this.player.x-e.sprite.x,near=billyCanAttack(dx,pb.center.y-(e.baseY-40));
    e.sprite.setVelocity(0).setPosition(e.min,e.baseY).setFlipX(dx>0);
@@ -381,9 +390,34 @@ export class GameScene extends Phaser.Scene {
    }
    if(eb.blocked.left||eb.blocked.right)e.speed=-e.speed;
   }
-  const barY=e.sprite.y-(e.kind==='mindflayer'?(Number(e.sprite.frame.name)===2?202:146):e.kind==='billy'?90:45),barWidth=e.kind==='mindflayer'?90:48;
+  const barY=e.sprite.y-(e.kind==='vecna'?218:e.kind==='mindflayer'?(Number(e.sprite.frame.name)===2?202:146):e.kind==='billy'?90:45),barWidth=e.kind==='mindflayer'||e.kind==='vecna'?90:48;
   e.bar.clear();e.bar.fillStyle(0x09111d,.95);e.bar.fillRect(e.sprite.x-barWidth/2,barY,barWidth,7);e.bar.fillStyle(e.controlledAt>=0?0xb399ed:e.aggro?0xeb6972:0x8bc9b1);e.bar.fillRect(e.sprite.x-barWidth/2+1,barY+1,(barWidth-2)*e.hp/e.maxHp,5);
-  e.label.setPosition(e.sprite.x,barY-8).setText((e.kind==='mindflayer'?'MIND FLAYER ':e.kind==='billy'?'BILLY ':e.aggro?'! ':'')+e.hp+'/'+e.maxHp);
+  e.label.setPosition(e.sprite.x,barY-8).setText((e.kind==='vecna'?'VECNA ':e.kind==='mindflayer'?'MIND FLAYER ':e.kind==='billy'?'BILLY ':e.aggro?'! ':'')+e.hp+'/'+e.maxHp);
+ }
+ vecnaBrain(e:Enemy){
+  e.sprite.setVelocity(0);e.sprite.scaleY=204/554;e.marker??=this.add.graphics().setDepth(6);e.marker.clear();
+  if(e.leap){
+   const jump=e.leap,t=Math.min(1,(this.elapsed-jump.at)/VECNA.flight);
+   e.sprite.setFrame(2).setOrigin(.5,678/724).setPosition(jump.x+(jump.tx-jump.x)*t,jump.y+(jump.ty-jump.y)*t-Math.sin(Math.PI*t)*VECNA.jumpHeight).clearTint();
+   e.marker.lineStyle(2,0xff6c79,.8);e.marker.strokeEllipse(jump.tx,jump.ty-3,VECNA.slamRadius*2,16);
+   if(t>=1){
+    e.leap=undefined;e.target=undefined;e.landedAt=this.elapsed;e.sprite.setPosition(jump.tx,jump.ty).setFrame(3).setOrigin(.5,696/724);e.marker.clear();
+    this.burst(jump.tx,jump.ty-8,0xff6d89,32);sound('explosion');if(!settings.reducedMotion)this.cameras.main.shake(180,.004);
+    if(vecnaLandingHits(jump.tx,jump.ty,this.player.body as Phaser.Physics.Arcade.Body))this.damage(jump.tx,VECNA.damage);
+   }
+   return;
+  }
+  const near=this.player.x>=e.min-40&&Math.abs(this.player.x-e.sprite.x)<640;
+  if(near&&!e.aggro)e.lastAttack=this.elapsed;e.aggro=near;
+  const cycle=this.elapsed-e.lastAttack,charging=near&&cycle>=VECNA.interval-VECNA.windup;
+  const landing=this.elapsed-(e.landedAt??-10000)<300;
+  e.sprite.setFlipX(this.player.x>e.sprite.x).setFrame(landing?3:charging?1:0).setOrigin(.5,landing?696/724:678/724);
+  if(!landing&&!charging&&!settings.reducedMotion)e.sprite.scaleY=(204/554)*(1+Math.sin(this.elapsed*.004)*.008);
+  if(charging){
+   if(!e.target){const x=Phaser.Math.Clamp(this.player.x,e.min,e.max);e.target={x,y:this.groundY(x)};sound('psi');this.notify('وکنا — از نشان قرمزِ فرود فاصله بگیر!');}
+   e.sprite.setTint(0xffa0a0);e.marker.lineStyle(2,0xff6c79,.85);e.marker.strokeEllipse(e.target.x,e.target.y-3,VECNA.slamRadius*2,16);e.marker.lineBetween(e.target.x-12,e.target.y-8,e.target.x+12,e.target.y-8);
+   if(cycle>=VECNA.interval){e.lastAttack=this.elapsed;e.leap={at:this.elapsed,x:e.sprite.x,y:e.sprite.y,tx:e.target.x,ty:e.target.y};e.sprite.setFrame(2);sound('jump');}
+  }else{e.sprite.clearTint();e.target=undefined;}
  }
  throwMolotov(enemy:Enemy){
   const target=this.player.body as Phaser.Physics.Arcade.Body,direction=this.player.x<enemy.sprite.x?-1:1;
@@ -436,6 +470,7 @@ export class GameScene extends Phaser.Scene {
  encounter(enemy:Phaser.Physics.Arcade.Sprite){
   if(this.status!=='playing'||!enemy.active)return;
   const info=this.enemies.find(e=>e.sprite===enemy);if(!info||info.controlledAt>=0)return;
+  if(info.kind==='vecna'&&info.leap)return;
   const body=this.player.body as Phaser.Physics.Arcade.Body;const eb=enemy.body as Phaser.Physics.Arcade.Body;
   if(isStomp(this.previousBottom,eb.top,body.velocity.y)){
    this.player.setVelocityY(-360);this.jumpsUsed=1;this.hurtEnemy(info,2);this.emitHud();
@@ -443,7 +478,7 @@ export class GameScene extends Phaser.Scene {
  }
  damage(fromX:number,hearts=1){
   if(this.status!=='playing'||this.elapsed<this.state.invincibleUntil)return;
-  this.state=hearts===MIND_FLAYER.damage?takeWaveHit(this.state,this.elapsed):takeHit(this.state,this.elapsed);sound('hit');this.burst(this.player.x,this.player.y,0xdc5863,12);
+  this.state=hearts===VECNA.damage?takeVecnaHit(this.state,this.elapsed):hearts===MIND_FLAYER.damage?takeWaveHit(this.state,this.elapsed):takeHit(this.state,this.elapsed);sound('hit');this.burst(this.player.x,this.player.y,0xdc5863,12);
   if(!settings.reducedMotion)this.cameras.main.shake(130,.003);
   this.knockUntil=this.elapsed+220;this.player.setVelocity(this.player.x<fromX?-180:180,-230);
   if(this.state.hearts<=0)this.die();this.emitHud();
