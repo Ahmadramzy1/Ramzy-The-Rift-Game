@@ -4,8 +4,9 @@ import {initialState} from '../src/game/mechanics';
 import {enemyStats} from '../src/game/combat';
 import {STAGES,DUNGEONS} from '../src/game/levels';
 it('adds one 60HP boss to stage three, with a five second attack and no normal health multiplier',()=>{
- expect(STAGES.filter(s=>s.enemies.some(e=>e.kind==='mindflayer')).map(s=>s.id)).toEqual([3]);
+ expect(STAGES.filter(s=>s.enemies.some(e=>e.kind==='mindflayer')).map(s=>s.id)).toEqual([3,10]);
  expect(STAGES[2].enemies.filter(e=>e.kind==='mindflayer')).toHaveLength(1);
+ expect(STAGES[9].enemies.filter(e=>e.kind==='mindflayer')).toHaveLength(2);
  expect(DUNGEONS.every(s=>s.enemies.every(e=>e.kind!=='mindflayer'))).toBe(true);
  expect(enemyStats('mindflayer',3).hp).toBe(60);expect(MIND_FLAYER.hp).toBe(60);expect(MIND_FLAYER.interval).toBe(5000);
 });

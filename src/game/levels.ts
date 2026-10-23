@@ -76,7 +76,7 @@ export const STAGES:Stage[]=themes.map((t,i)=>{
  const hazards=i<2?[]:[platforms[1],...(i>4?[platforms[2],platforms[4]]:[])].map((p,j)=>({x:p.x+130+j*12,y:p.y,w:28+Math.min(i*3,25)}));
  const ceilings=i<3?[]:[{x:180,y:platforms[0].y-76,w:120+Math.min(i*5,45)}];
  const middle=platforms.reduce((best,p)=>Math.abs(p.x+p.w/2-width/2)<Math.abs(best.x+best.w/2-width/2)?p:best);
- let checkpoint=Math.max(middle.x+90,Math.min(middle.x+middle.w-90,width/2));
+ let checkpoint=i===0?platforms[3].x+100:Math.max(middle.x+90,Math.min(middle.x+middle.w-90,width/2));
  for(const hazard of hazards)if(checkpoint>hazard.x-65&&checkpoint<hazard.x+hazard.w+65)checkpoint=hazard.x+hazard.w+90;
  return {id:i+1,name:t[0],english:t[1],subtitle:t[2],tile:t[3],color:t[4],width,exit:width-130,checkpoint,dungeonX:platforms[2].x+65,platforms:[...platforms,...optional],enemies,coins,power:{x:360+i*5,y:optional[0].y-45},tapes:[{x:1150+i*7,y:optional[1].y-45},{x:2280,y:optional[2].y-45}],decor,hazards,ceilings};
 });
