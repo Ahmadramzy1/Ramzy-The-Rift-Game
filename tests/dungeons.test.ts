@@ -15,11 +15,11 @@ describe('stage encounter and coin progression',()=>{
   const unlocked=[['crawler'],['bat','crawler'],['bat','crawler','husk','slime'],['bat','crawler','husk','slime'],['bat','crawler','husk','slime'],['bat','bloom','crawler','husk','slime']];
   for(const stages of [STAGES,DUNGEONS])for(const stage of stages)expect([...new Set(stage.enemies.filter(e=>e.kind!=='mindflayer'&&e.kind!=='billy'&&e.kind!=='vecna').map(e=>e.kind))].sort()).toEqual(unlocked[Math.min(stage.id-1,5)]);
  });
- it('places exactly 1.5 times the previous coins evenly above reachable route platforms',()=>{
+ it('keeps coins evenly spaced above every reachable room as routes grow',()=>{
   for(const stage of [...STAGES,...DUNGEONS]){
    const route=stage.platforms.filter(p=>!p.kind);
    expect(routeReachable(stage)).toBe(true);
-   expect(stage.coins).toHaveLength(DUNGEONS.includes(stage)?18:(stage.id===1?30:36));
+   expect(stage.coins).toHaveLength(DUNGEONS.includes(stage)?route.reduce((sum,_,j)=>sum+4+j%2,0):route.length*6);
    for(const p of route){
     const coins=stage.coins.filter(c=>c.x>p.x&&c.x<p.x+p.w).sort((a,b)=>a.x-b.x);
     expect(coins.length).toBeGreaterThanOrEqual(4);

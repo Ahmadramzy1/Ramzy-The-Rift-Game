@@ -19,4 +19,5 @@ for(const ref of refs){
 }
 for(const file of ['assets/hero.png','assets/crawler.png','assets/upgrade-atlas.png','assets/held-weapons.png','assets/mind-flayer.png','assets/psychic-shockwave.png','assets/billy-wheelchair.png','assets/vecna.png','assets/terrain.json','assets/world-map.png','assets/main-menu.png','assets/game-over-title.png','assets/eleven-s5.png','audio/going-under-remastered.mp3','audio/8bit-stranger-things.mp3','video/final-life.mp4','video/main-menu.mp4'])await access(path.join(root,file));
 for(let id=1;id<=10;id++)await access(path.join(root,'assets/environments/stage-'+String(id).padStart(2,'0')+'.png'));
+await access(path.join(root,'assets/vecna-impact.png'));
 console.log('Pages entry, fonts, sprites, ten paired environment atlases, soundtrack and cinematic verified.');

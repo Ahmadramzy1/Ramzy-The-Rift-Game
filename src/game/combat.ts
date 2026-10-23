@@ -1,9 +1,10 @@
 import type {EnemyKind} from './levels';
 import type {PlayerState} from './mechanics';
+import {VECNA} from './vecna';
 export const clampChaseVelocity=(x:number,min:number,max:number,v:number)=>(x<=min+5&&v<0)||(x>=max-5&&v>0)?0:v;
 export const blocksPageScroll=(key:string)=>['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(key);
 export function enemyStats(kind:EnemyKind,stage:number){
- if(kind==='vecna')return {hp:100,speed:0,aggro:640,cooldown:3000};
+ if(kind==='vecna')return {hp:VECNA.hp,speed:0,aggro:VECNA.aggroRange,cooldown:VECNA.interval};
  if(kind==='mindflayer')return {hp:60,speed:0,aggro:720,cooldown:5000};
  if(kind==='billy')return {hp:7+Math.max(0,stage-2),speed:0,aggro:540,cooldown:4000};
  const hp=Math.ceil({crawler:2,bat:1,husk:3,slime:4,bloom:5}[kind]*1.5)+2+Math.max(0,stage-1);

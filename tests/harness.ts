@@ -5,6 +5,7 @@ import {CAMPAIGN_KEY,loadCampaign,awardCoin,buyItem} from '../src/game/campaign'
 import {command} from '../src/game/bridge';
 import {STAGES} from '../src/game/levels';
 import {medkitPlacement} from '../src/game/pickupPlacement';
+import {enemyCoinReward} from '../src/game/rewards';
 const scene=new GameScene();settings.sound=false;
 const game=new Phaser.Game({type:Phaser.CANVAS,parent:'game',width:1920,height:1080,scene:[scene],physics:{default:'arcade',arcade:{gravity:{x:0,y:1500},fps:60,fixedStep:true}},audio:{noAudio:true},pixelArt:true});
 const output=document.getElementById('results')!;
@@ -32,9 +33,9 @@ for(const [label,throwing] of [['Preview Billy laugh',false],['Preview Billy thr
 const frames=(count:number)=>new Promise<void>(resolve=>{let n=0;const tick=()=>{if(++n>=count){game.events.off('poststep',tick);resolve();}};game.events.on('poststep',tick);});
 function release(){for(const key of Object.values(scene.keys))key.isDown=false;for(const key of Object.keys(touch) as (keyof typeof touch)[])touch[key]=false;}
 async function fresh(id=0){release();scene.loadStage(id);scene.startPlay();await frames(15);}
-for(const [label,phase] of [['Preview Vecna',0],['Preview Vecna rage',2700],['Preview Vecna leap',3001]] as const){
+for(const [label,phase] of [['Preview Vecna',0],['Preview Vecna rage',2700],['Preview Vecna leap',3001],['Preview Vecna impact',4000]] as const){
  const button=document.createElement('button');button.textContent=label;output.before(button);button.onclick=async()=>{
-  await fresh(4);scene.enterDungeon();await frames(4);const v=scene.enemies.find(e=>e.kind==='vecna')!;scene.enemies.filter(e=>e!==v).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.player.setPosition(1810,370);scene.player.setVelocity(0);await frames(4);v.lastAttack=scene.elapsed;scene.elapsed+=phase;await frames(2);if(phase>3000)await frames(14);scene.cameras.main.stopFollow().setZoom(2.5).centerOn(1920,250);scene.pause();
+  await fresh(4);scene.enterDungeon();await frames(4);const v=scene.enemies.find(e=>e.kind==='vecna')!;scene.enemies.filter(e=>e!==v).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.player.setPosition(v.sprite.x-150,v.baseY-48);scene.player.setVelocity(0);await frames(4);v.lastAttack=scene.elapsed;scene.elapsed+=phase;await frames(2);if(phase>3000)await frames(14);if(phase>=4000&&v.leap){scene.player.setPosition(v.leap.tx+180,v.leap.ty-48);scene.state.invincibleUntil=Infinity;scene.elapsed=v.leap.at+900;await frames(10);}scene.cameras.main.stopFollow().setZoom(2.5).centerOn(v.sprite.x-25,250);scene.pause();
  };
 }
 document.getElementById('run')!.onclick=async()=>{
@@ -46,7 +47,8 @@ document.getElementById('run')!.onclick=async()=>{
  const bossOnly=new URLSearchParams(location.search).has('bossOnly');
  const billyOnly=new URLSearchParams(location.search).has('billyOnly');
  const vecnaOnly=new URLSearchParams(location.search).has('vecnaOnly');
- const test=async(name:string,fn:()=>Promise<void>)=>{if(vecnaOnly&&!name.startsWith('vecna:'))return;if(billyOnly&&!/^(billy|medkit):/.test(name))return;if(bossOnly&&!name.startsWith('boss:'))return;if(upgradeOnly&&!name.startsWith('upgrade:'))return;if(weaponsOnly&&!/upgrade: purchased|upgrade: two fire/.test(name))return;if(new URLSearchParams(location.search).has('dungeonOnly')&&!/dungeon|wallet|collectibles/.test(name))return;try{await fn();passed++;report('PASS '+name);}catch(e){report('FAIL '+name+' — '+String(e));throw e;}};
+ const progressionOnly=new URLSearchParams(location.search).has('progressionOnly');
+ const test=async(name:string,fn:()=>Promise<void>)=>{if(progressionOnly&&!/^(reward|finale|vecna):/.test(name))return;if(vecnaOnly&&!name.startsWith('vecna:'))return;if(billyOnly&&!/^(billy|medkit):/.test(name))return;if(bossOnly&&!name.startsWith('boss:'))return;if(upgradeOnly&&!name.startsWith('upgrade:'))return;if(weaponsOnly&&!/upgrade: purchased|upgrade: two fire/.test(name))return;if(new URLSearchParams(location.search).has('dungeonOnly')&&!/dungeon|wallet|collectibles/.test(name))return;try{await fn();passed++;report('PASS '+name);}catch(e){report('FAIL '+name+' — '+String(e));throw e;}};
  try{
   await test('ground, acceleration and feet-preserving crouch',async()=>{
    await fresh();const b=scene.player.body as Phaser.Physics.Arcade.Body;assert(b.blocked.down,'spawn must stand on ground');
@@ -155,11 +157,26 @@ document.getElementById('run')!.onclick=async()=>{
   });
   await test('vecna: dungeon-five rage, locked jump, dodge, three-heart landing and defeat gate',async()=>{
    await fresh(4);scene.enterDungeon();await frames(4);const v=scene.enemies.find(e=>e.kind==='vecna')!;assert(v.hp===100&&v.maxHp===100&&scene.enemies.length===5,'100 HP boss with four guards');assert(Math.abs(v.sprite.scaleX*554-204)<1,'boss is three times visible hero height');
-   scene.enemies.filter(e=>e!==v).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.player.setPosition(1900,370);scene.player.setVelocity(0);await frames(5);v.lastAttack=scene.elapsed;scene.elapsed=v.lastAttack+2600;await frames(2);assert(Number(v.sprite.frame.name)===1&&!!v.target,'rage marks the landing');
-   scene.elapsed=v.lastAttack+2990;await frames(2);assert(!!v.leap,'three seconds launches leap');const jump=v.leap!;await frames(12);assert(v.sprite.y<jump.y-60,'Vecna visibly airborne');scene.player.setPosition(2080,370);scene.player.setVelocity(0);scene.elapsed=jump.at+890;await frames(2);assert(scene.state.hearts===3&&scene.status==='playing','lateral dodge avoids impact');assert(Math.abs(v.sprite.x-jump.tx)<1,'landing remains on marked position');
-   v.lastAttack=scene.elapsed-2600;await frames(2);scene.elapsed=v.lastAttack+2990;await frames(2);const next=v.leap!;assert(!!next,'second leap');scene.elapsed=next.at+890;await frames(2);assert(scene.status==='dead'&&scene.state.lives===2,'three-heart slam spends one life, never three lives');scene.respawn();scene.hurtEnemy(v,v.maxHp,true);await frames(2);assert(!v.sprite.active,'max HP damage defeats boss');scene.player.setPosition(2110,370);scene.player.setVelocity(0);await frames(4);assert(scene.area==='main'&&scene.dungeonCleared,'defeat unlocks dungeon clear exit');
+   scene.enemies.filter(e=>e!==v).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});
+   scene.player.setPosition(v.sprite.x-800,scene.groundY(v.sprite.x-800)-48);scene.player.setVelocity(0);await frames(2);assert(v.aggro,'detects hero at 800, beyond old 640 range');assert(scene.elapsed-v.lastAttack>2000,'first leap timer advances immediately');
+   scene.player.setPosition(v.min+100,v.baseY-48);scene.player.setVelocity(0);await frames(5);v.lastAttack=scene.elapsed;scene.elapsed=v.lastAttack+2600;await frames(2);assert(Number(v.sprite.frame.name)===1&&!!v.target,'rage marks the landing');
+   scene.elapsed=v.lastAttack+2990;await frames(2);assert(!!v.leap,'three seconds launches leap');const jump=v.leap!;await frames(12);assert(v.sprite.y<jump.y-60,'Vecna visibly airborne');scene.player.setPosition(jump.tx+200,v.baseY-48);scene.player.setVelocity(0);scene.elapsed=jump.at+890;await frames(2);assert(scene.state.hearts===3&&scene.status==='playing','lateral dodge avoids impact');assert(Math.abs(v.sprite.x-jump.tx)<1,'landing remains on marked position');assert(scene.impacts.length===1&&scene.shockwaves.filter(w=>w.vecna).length===2,'landing creates animated explosion and two waves');
+   const wave=scene.shockwaves.find(w=>w.vecna&&w.direction===1)!;const wx=wave.x;await frames(5);assert(wave.x>wx,'ground wave travels');
+   scene.player.setPosition(wave.x+25,v.baseY-140);scene.player.setVelocity(0,-100);await frames(5);assert(scene.state.hearts===3,'airborne hero clears moving wave');
+   scene.player.setPosition(wave.x+25,v.baseY-48);scene.player.setVelocity(0);scene.state.invincibleUntil=0;await frames(10);assert(scene.status==='dead'&&scene.state.lives===2,'ground wave deals three hearts and consumes one life');scene.respawn();scene.hurtEnemy(v,v.maxHp,true);await frames(2);assert(!v.sprite.active&&scene.shockwaves.length===0,'defeat cancels boss waves');scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(4);assert(scene.area==='main'&&scene.dungeonCleared,'defeat unlocks dungeon clear exit');
   });
-  const expected=vecnaOnly?1:billyOnly?2:bossOnly?1:weaponsOnly?2:upgradeOnly?4:new URLSearchParams(location.search).has('dungeonOnly')?4:23;report('RESULT: '+passed+'/'+expected+' engine checks passed.');document.title='PASS '+passed+'/'+expected+' — RAMZY';
+  await test('reward: exact coins, corpse guard, room persistence and double reward',async()=>{
+   await fresh(9);const before=loadCampaign().wallet;
+   const kinds=['crawler','husk','mindflayer','vecna'] as const;let total=0;
+   for(const kind of kinds){const e=scene.enemies.find(e=>e.kind===kind)!;scene.hurtEnemy(e,e.maxHp,true);scene.killEnemy(e);total+=enemyCoinReward(kind);assert(loadCampaign().wallet===before+total,'exact single reward '+kind);}
+   assert(scene.killCoins===127&&scene.state.coins===127,'kill coins shown in HUD');scene.enterDungeon();await frames(2);scene.leaveDungeon();await frames(2);assert(scene.killCoins===127,'room changes retain earned bounty');assert(scene.enemies.filter(e=>kinds.includes(e.kind as typeof kinds[number])&&!e.sprite.active).length===0,'killed enemies are not respawned by room travel');
+   scene.multiplierCollected=true;scene.enemies.filter(e=>e.kind==='mindflayer'||e.kind==='vecna').forEach(e=>scene.killEnemy(e));const earned=scene.killCoins,balance=loadCampaign().wallet;scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(4);assert(loadCampaign().wallet===balance+earned,'2x includes combat earnings');
+  });
+  await test('finale: extended world bounds, safe ends and four-boss gate',async()=>{
+   for(let i=0;i<10;i++){await fresh(i);scene.state.invincibleUntil=Infinity;scene.enemies.forEach(e=>e.sprite.disableBody(true,true));const x=scene.stageData.exit-100;scene.player.setPosition(x,scene.groundY(x)-48).setVelocity(0);await frames(45);assert((scene.player.body as Phaser.Physics.Arcade.Body).blocked.down,'extended end has floor '+i);assert(scene.physics.world.bounds.width===scene.stageData.width,'physics covers long route');assert(scene.cameras.main.worldView.right>scene.player.x,'camera follows long route');}
+   await fresh(9);scene.state.invincibleUntil=Infinity;const bosses=scene.enemies.filter(e=>e.kind==='mindflayer'||e.kind==='vecna');assert(bosses.length===4,'two minis and two bosses');scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48).setVelocity(0);await frames(3);assert(scene.status==='playing','living bosses lock gate');bosses.slice(0,3).forEach(e=>scene.killEnemy(e));await frames(2);assert(scene.status==='playing','one remaining boss locks gate');scene.killEnemy(bosses[3]);await frames(3);assert(scene.status==='complete','four defeats open final gate');
+  });
+  const expected=progressionOnly?3:vecnaOnly?1:billyOnly?2:bossOnly?1:weaponsOnly?2:upgradeOnly?4:new URLSearchParams(location.search).has('dungeonOnly')?4:25;report('RESULT: '+passed+'/'+expected+' engine checks passed.');document.title='PASS '+passed+'/'+expected+' — RAMZY';
  }catch(e){release();scene.pause();report('RESULT: stopped after '+passed+' passed. '+String(e));document.title='FAIL — Signal 86';}
  finally{if(upgradeOnly){if(savedCampaign===null)localStorage.removeItem(CAMPAIGN_KEY);else localStorage.setItem(CAMPAIGN_KEY,savedCampaign);if(savedLegacy===null)localStorage.removeItem('ramzy-v2-progress');else localStorage.setItem('ramzy-v2-progress',savedLegacy);}}
 };
