@@ -8,6 +8,11 @@ const scene=new GameScene();settings.sound=false;
 const game=new Phaser.Game({type:Phaser.CANVAS,parent:'game',width:1920,height:1080,scene:[scene],physics:{default:'arcade',arcade:{gravity:{x:0,y:1500},fps:60,fixedStep:true}},audio:{noAudio:true},pixelArt:true});
 const output=document.getElementById('results')!;
 const enable=()=>{if(scene.player&&scene.keys){(document.getElementById('run') as HTMLButtonElement).disabled=false;output.textContent='Ready.';game.events.off('poststep',enable);}};game.events.on('poststep',enable);
+for(const [label,kind,level] of [['Preview slingshot','slingshot',1],['Preview steel sword','sword',1],['Preview purple sword','sword',2]] as const){
+ const button=document.createElement('button');button.textContent=label;output.before(button);button.onclick=async()=>{
+  await fresh();scene.enemies.forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.upgrades.swordLevel=level;scene.equip(kind);await frames(5);scene.pause();
+ };
+}
 function report(text:string){output.textContent+='\n'+text;}
 function assert(ok:unknown,message:string){if(!ok)throw new Error(message);}
 const frames=(count:number)=>new Promise<void>(resolve=>{let n=0;const tick=()=>{if(++n>=count){game.events.off('poststep',tick);resolve();}};game.events.on('poststep',tick);});
@@ -18,7 +23,8 @@ document.getElementById('run')!.onclick=async()=>{
  let passed=0;
  const upgradeOnly=new URLSearchParams(location.search).has('upgradeOnly'),savedCampaign=localStorage.getItem(CAMPAIGN_KEY),savedLegacy=localStorage.getItem('ramzy-v2-progress');
  if(upgradeOnly){localStorage.removeItem(CAMPAIGN_KEY);localStorage.removeItem('ramzy-v2-progress');}
- const test=async(name:string,fn:()=>Promise<void>)=>{if(upgradeOnly&&!name.startsWith('upgrade:'))return;if(new URLSearchParams(location.search).has('dungeonOnly')&&!/dungeon|wallet|collectibles/.test(name))return;try{await fn();passed++;report('PASS '+name);}catch(e){report('FAIL '+name+' — '+String(e));throw e;}};
+ const weaponsOnly=new URLSearchParams(location.search).has('weaponsOnly');
+ const test=async(name:string,fn:()=>Promise<void>)=>{if(upgradeOnly&&!name.startsWith('upgrade:'))return;if(weaponsOnly&&!/upgrade: purchased|upgrade: two fire/.test(name))return;if(new URLSearchParams(location.search).has('dungeonOnly')&&!/dungeon|wallet|collectibles/.test(name))return;try{await fn();passed++;report('PASS '+name);}catch(e){report('FAIL '+name+' — '+String(e));throw e;}};
  try{
   await test('ground, acceleration and feet-preserving crouch',async()=>{
    await fresh();const b=scene.player.body as Phaser.Physics.Arcade.Body;assert(b.blocked.down,'spawn must stand on ground');
@@ -98,12 +104,12 @@ document.getElementById('run')!.onclick=async()=>{
    assert(buyItem(1,'slingshot'),'level two');await fresh();scene.fire(300,400);assert(scene.bullets.getLength()===2,'level two has two projectiles');assert(scene.bullets.getChildren().every(b=>!(b as Phaser.Physics.Arcade.Image).getData('fire')),'level two not burning');
    assert(buyItem(1,'slingshot')&&buyItem(1,'legendarySword'),'top weapon upgrades');await fresh();scene.state.invincibleUntil=Infinity;const e=scene.enemies[0];e.sprite.setPosition(250,410);e.min=250;e.max=250;e.speed=0;e.hp=10;e.maxHp=10;scene.player.setPosition(170,410);await frames(3);
    scene.fire(250,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);const shots=scene.bullets.getChildren() as Phaser.Physics.Arcade.Image[];assert(shots.length===2&&shots.every(s=>s.getData('fire')&&s.frame.name==='fire-pellet'),'two generated flame projectiles');await frames(16);assert(e.hp===6,'both fire pellets hit for two each: '+e.hp);
-   scene.equip('sword');assert(scene.weapon.texture.key==='upgrades'&&scene.weapon.frame.name==='legendary-blade','equipped sword uses purple generated image');await frames(20);e.sprite.setPosition(220,410);e.min=220;e.max=220;scene.player.setPosition(270,410);scene.player.setVelocity(0);await frames(3);scene.fire(220,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(15);assert(e.hp===0,'left aimed legendary sword hits for six');
+   scene.equip('sword');assert(scene.weapon.texture.key==='held-weapons'&&scene.weapon.frame.name==='grip-purple','equipped sword uses purple generated image with gripping hand');await frames(20);e.sprite.setPosition(220,410);e.min=220;e.max=220;scene.player.setPosition(270,410);scene.player.setVelocity(0);await frames(3);scene.fire(220,(e.sprite.body as Phaser.Physics.Arcade.Body).center.y);await frames(15);assert(e.hp===0,'left aimed legendary sword hits for six');
   });
   await test('upgrade: blue dungeon token doubles main and dungeon earnings once at stage completion',async()=>{
    await fresh();const before=loadCampaign().wallet,main=scene.stageData.coins[0];scene.player.setPosition(main.x,main.y);await frames(4);scene.enterDungeon();await frames(5);const coin=scene.stageData.coins[0];scene.player.setPosition(coin.x,coin.y);await frames(4);scene.enemies.forEach(e=>scene.killEnemy(e));scene.player.setPosition(scene.stageData.exit-85,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(6);assert(scene.multiplierCollected,'bobbing generated 2x coin collected');scene.leaveDungeon(true);await frames(4);scene.player.setPosition(scene.stageData.exit,scene.groundY(scene.stageData.exit)-48);scene.player.setVelocity(0);await frames(5);assert(scene.status==='complete','stage finished');assert(loadCampaign().wallet===before+4,'two collected coins credited twice');await frames(8);assert(loadCampaign().wallet===before+4,'payout never repeats');
   });
-  const expected=upgradeOnly?4:new URLSearchParams(location.search).has('dungeonOnly')?4:19;report('RESULT: '+passed+'/'+expected+' engine checks passed.');document.title='PASS '+passed+'/'+expected+' — RAMZY';
+  const expected=weaponsOnly?2:upgradeOnly?4:new URLSearchParams(location.search).has('dungeonOnly')?4:19;report('RESULT: '+passed+'/'+expected+' engine checks passed.');document.title='PASS '+passed+'/'+expected+' — RAMZY';
  }catch(e){release();scene.pause();report('RESULT: stopped after '+passed+' passed. '+String(e));document.title='FAIL — Signal 86';}
  finally{if(upgradeOnly){if(savedCampaign===null)localStorage.removeItem(CAMPAIGN_KEY);else localStorage.setItem(CAMPAIGN_KEY,savedCampaign);if(savedLegacy===null)localStorage.removeItem('ramzy-v2-progress');else localStorage.setItem('ramzy-v2-progress',savedLegacy);}}
 };

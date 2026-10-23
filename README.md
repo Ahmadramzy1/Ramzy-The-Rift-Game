@@ -93,6 +93,8 @@ npm run build
 
 بررسی متمرکز ارتقاها: `/tests/harness.html?upgradeOnly` چهار سناریوی واقعی Phaser را اجرا می‌کند؛ داده‌های ذخیرهٔ بازی را پس از اجرا برمی‌گرداند.
 
+تصاویر مخصوصِ گرفتن سلاح در `public/assets/held-weapons.png` تولید شده‌اند: تیرکمان چوبی/آتشین و شمشیر فولادی/بنفش، هرکدام با دست روی قبضه. تیرکمان عمودی می‌ماند؛ بازوی جلو قبضه را نگه می‌دارد و دست دوم کش را می‌کشد. شمشیر حالت آماده‌باش رو به بالا دارد و هنگام حمله از مچ می‌چرخد. موقعیت دست‌ها و خروج تیر از همان حالت بصری در `weaponPose.ts` محاسبه می‌شود.
+
 یک ستاره: پایان مرحله؛ دو ستاره: پایان مرحله همراه همهٔ سکه‌ها و رادیوهای مسیر اصلی؛ سه ستاره: پاک‌کردن دانجن و سپس پایان مرحله. بهترین رکورد حفظ می‌شود. سکه‌های دانجن پاداش جداگانهٔ کیف پول‌اند.
 
 Music playlist: Going Under (Remastered) and 8bit Stranger Things. Settings select the starting track and persist it as ramzy-music-track. The transport alternates both tracks indefinitely with crossfades; stage starts restart the selected track. Independent music/SFX volumes remain available.

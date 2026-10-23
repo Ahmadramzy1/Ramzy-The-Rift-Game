@@ -6,6 +6,7 @@ import {enemyStats,hitEnemy,shouldAggro,tryJump,crouchBox,canStand,useAbility,ch
 import {canUseDungeonDoor,hasGroundSupport} from './dungeons';
 import {awardCoin,takeStageLoadout,loadCampaign,recordStageResult,type StageLoadout} from './campaign';
 import {WEAPONS,projectileInRange,slingshotStats,swordDamage,swordAimInRange,canDoubleJump,DOUBLE_JUMP_COOLDOWN,stageCoinBonus,type WeaponKind} from './weapons';
+import {weaponPose} from './weaponPose';
 
 type Enemy = {index:number;sprite:Phaser.Physics.Arcade.Sprite;min:number;max:number;speed:number;kind:EnemyKind;baseY:number;phase:number;hp:number;maxHp:number;invulnerableUntil:number;aggro:boolean;alertAt:number;lastAttack:number;bar:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;controlledAt:number;liftY:number};
 const propKeys=['grass','stone','forest','metal','rift','floating','metal-platform','rift-platform','bush','rock','barrel','barricade','cone','log','fence','lamp','streetlamp','pole','wood-fence','tree','tower','drain','waterpipe','portal','sign','radio','tape','battery','keycard','heart','coin','mushroom','energy','medkit','key','vial'];
@@ -36,6 +37,7 @@ export class GameScene extends Phaser.Scene {
   this.load.json('terrain',base+'terrain.json');
   this.load.image('sky',base+'sky.png');
   this.load.image('upgrades',base+'upgrade-atlas.png');
+  this.load.image('held-weapons',base+'held-weapons.png');
  }
  create(){
   const spriteAnims:Record<string,{key:string;frames:number[];rate:number}>={
@@ -258,27 +260,35 @@ export class GameScene extends Phaser.Scene {
   if(!this.textures.exists('sword')){const g=this.add.graphics();g.fillStyle(0x0b1520);g.fillPoints([{x:12,y:0},{x:17,y:6},{x:16,y:31},{x:20,y:31},{x:20,y:35},{x:14,y:35},{x:14,y:43},{x:8,y:43},{x:8,y:35},{x:3,y:35},{x:3,y:31},{x:7,y:31},{x:7,y:6}],true);g.fillStyle(0xc5d5dd);g.fillRect(9,7,5,25);g.fillTriangle(9,8,12,2,15,8);g.fillStyle(0x6e91a4);g.fillRect(13,8,2,24);g.fillStyle(0xe4b36c);g.fillRect(5,32,13,2);g.fillStyle(0x754a36);g.fillRect(10,35,3,7);g.generateTexture('sword',24,44);g.destroy();}
  }
  updateWeaponArt(){
-  if(this.equipped==='sword')this.weapon.setTexture('upgrades',this.upgrades.swordLevel===2?'legendary-blade':'steel-blade').setDisplaySize(this.upgrades.swordLevel===2?30:23,53).setOrigin(.5,.88);
-  else if(this.upgrades.slingshotLevel>1)this.weapon.setTexture('upgrades',this.upgrades.slingshotLevel===3?'sling-fire':'sling-double').setDisplaySize(25,31).setOrigin(.5,.86);
-  else this.weapon.setTexture('slingshot').setDisplaySize(22,26).setOrigin(.5,.88);
+  const atlas=this.textures.get('held-weapons');
+  if(!atlas.has('grip-sling')){
+   const source=atlas.getSourceImage() as HTMLImageElement,w=source.width/4,h=source.height;
+   ['grip-sling','grip-fire','grip-steel','grip-purple'].forEach((name,i)=>atlas.add(name,0,Math.round(i*w),0,Math.round((i+1)*w)-Math.round(i*w),h));
+  }
+  const frame=this.equipped==='sword'?(this.upgrades.swordLevel===2?'grip-purple':'grip-steel'):(this.upgrades.slingshotLevel===3?'grip-fire':'grip-sling');
+  this.weapon.setTexture('held-weapons',frame);const height=this.equipped==='sword'?60:48;
+  this.weapon.setDisplaySize(height*this.weapon.width/this.weapon.height,height).setOrigin(.5,.77);
  }
  equip(kind:WeaponKind){this.equipped=kind;if(this.weapon)this.updateWeaponArt();this.game.canvas.focus({preventScroll:true});this.emitHud();}
  fire(targetX?:number,targetY?:number){
   if(this.status!=='playing'||this.elapsed-this.lastShot<WEAPONS[this.equipped].cooldown||settings.menuOpen)return;
   this.lastShot=this.elapsed;const body=this.player.body as Phaser.Physics.Arcade.Body;
-  const x=this.player.x+(this.equipped==='sword'?0:this.player.flipX?-21:21),y=body.center.y;
+  const x=this.player.x,y=body.center.y;
   if(targetX===undefined){const i=chooseTarget(x,y,this.enemies.map(e=>({x:e.sprite.x,y:e.sprite.y,alive:e.hp>0&&e.controlledAt<0})),WEAPONS.slingshot.range);targetX=i>=0?this.enemies[i].sprite.x:x+(this.player.flipX?-250:250);targetY=i>=0?this.enemies[i].sprite.y:y;}
-  const angle=Math.atan2((targetY??y)-y,targetX-x);this.aimAngle=angle;
+  const angle=Math.atan2((targetY??y)-y,targetX-x);this.aimAngle=angle;this.player.setFlipX(Math.cos(angle)<0);
   if(this.equipped==='sword'){this.swordAngle=angle;this.player.setFlipX(Math.cos(angle)<0);this.swingStarted=this.elapsed;this.meleeHitDone=false;sound('shoot');return;}
   const stats=slingshotStats(this.upgrades.slingshotLevel);
+  const pose=weaponPose('slingshot',x,body.top+13,y,this.player.flipX?-1:1,angle,-1,0);
+  const muzzleX=pose.handX,muzzleY=pose.handY-15;
+  const shotAngle=Math.atan2((targetY??muzzleY)-muzzleY,targetX-muzzleX);
   for(let i=0;i<stats.pellets;i++){
-   const a=angle+(stats.pellets===2?(i===0?-.032:.032):0),offset=stats.pellets===2?(i===0?-4:4):0;
-   const shot=this.physics.add.image(x+Math.cos(a)*13-Math.sin(a)*offset,y+Math.sin(a)*13+Math.cos(a)*offset,stats.fire?'upgrades':'pellet',stats.fire?'fire-pellet':undefined).setDepth(15);this.bullets.add(shot);
+   const a=shotAngle+(stats.pellets===2?(i===0?-.032:.032):0),offset=stats.pellets===2?(i===0?-4:4):0;
+   const shot=this.physics.add.image(muzzleX+Math.cos(a)*5-Math.sin(a)*offset,muzzleY+Math.sin(a)*5+Math.cos(a)*offset,stats.fire?'upgrades':'pellet',stats.fire?'fire-pellet':undefined).setDepth(15);this.bullets.add(shot);
    if(stats.fire)shot.setDisplaySize(16,17).setRotation(a+Math.PI/2);
    shot.setVelocity(Math.cos(a)*650,Math.sin(a)*650);shot.setData('expires',this.elapsed+1400);
    shot.setData('originX',shot.x);shot.setData('originY',shot.y);shot.setData('damage',stats.damage);shot.setData('fire',stats.fire);shot.setData('trailAt',0);
   }
-  this.burst(x,y,stats.fire?0xff8436:0xe6bc7e,4);sound('shoot');
+  this.burst(muzzleX,muzzleY,stats.fire?0xff8436:0xe6bc7e,4);sound('shoot');
  }
  hurtEnemy(enemy:Enemy,damage:number,projectile=false){
   if(enemy.hp<=0||enemy.controlledAt>=0)return;
@@ -426,14 +436,28 @@ export class GameScene extends Phaser.Scene {
    }
   }
   const pointer=this.input.activePointer;
-  const aim=this.padConnected?this.aimAngle:pointer.x||pointer.y?Math.atan2(pointer.worldY-body.center.y,pointer.worldX-this.player.x):this.player.flipX?Math.PI:0;
+  const recentShot=this.elapsed-this.lastShot<260;
+  const aim=recentShot||this.padConnected?this.aimAngle:pointer.x||pointer.y?Math.atan2(pointer.worldY-body.center.y,pointer.worldX-this.player.x):this.player.flipX?Math.PI:0;
   const facing=this.player.flipX?-1:1,swing=(this.elapsed-this.swingStarted)/260;
   const swinging=this.equipped==='sword'&&swing>=0&&swing<1;
   const direction=swinging?this.swordAngle:aim;
-  const rotation=this.equipped==='slingshot'?aim+Math.PI/2:swinging?direction+Math.PI/2-1.05+swing*2.1:aim+Math.PI/2;
-  const handX=this.player.x+Math.cos(direction)*(swinging?24:17),handY=body.top+body.height*.48+Math.sin(direction)*(swinging?15:9);
-  this.weapon.setPosition(handX,handY).setRotation(rotation).setAlpha(this.player.alpha);
-  this.arm.clear();if(swinging){this.arm.lineStyle(9,0x0e1a25);this.arm.lineBetween(this.player.x+facing*7,body.top+14,handX,handY);this.arm.lineStyle(6,0x5d94b4);this.arm.lineBetween(this.player.x+facing*7,body.top+14,handX,handY);this.arm.fillStyle(0xe3a15d);this.arm.fillRect(handX-3,handY-3,6,6);
+  const recoil=Math.max(0,1-(this.elapsed-this.lastShot)/170);
+  const pose=weaponPose(this.equipped,this.player.x,body.top+13,body.center.y,facing,direction,swing,recoil);
+  this.weapon.setPosition(pose.handX,pose.handY).setRotation(pose.rotation).setFlipX(facing<0).setAlpha(this.player.alpha);
+  this.arm.clear();this.arm.setAlpha(this.player.alpha);
+  const sleeve=(sx:number,sy:number,ex:number,ey:number,hx:number,hy:number)=>{
+   for(const [width,color] of [[10,0x101c28],[7,0x477a9a],[3,0x6ea5be]]){
+    this.arm.lineStyle(width,color);this.arm.beginPath();this.arm.moveTo(sx,sy);this.arm.lineTo(ex,ey);this.arm.lineTo(hx,hy);this.arm.strokePath();
+   }
+  };
+  sleeve(pose.shoulderX,pose.shoulderY,pose.elbowX,pose.elbowY,pose.handX-facing*4,pose.handY);
+  if(this.equipped==='slingshot'){
+   // The forward hand holds the stem; the other hand draws the pouch to the cheek.
+   sleeve(this.player.x-facing*4,body.top+15,this.player.x-facing*9,body.center.y+8,pose.drawX,pose.drawY);
+   this.arm.fillStyle(0xe1a16c);this.arm.fillRect(pose.drawX-3,pose.drawY-3,6,6);
+   this.arm.lineStyle(1,0xc5a277);this.arm.lineBetween(pose.handX-6,pose.handY-23,pose.drawX,pose.drawY);this.arm.lineBetween(pose.handX+6,pose.handY-23,pose.drawX,pose.drawY);
+  }
+  if(swinging){
    if(!this.meleeHitDone&&swing>.26){this.meleeHitDone=true;for(const enemy of this.enemies)if(enemy.sprite.active&&enemy.controlledAt<0&&swordAimInRange(this.player.x,body.center.y,(enemy.sprite.body as Phaser.Physics.Arcade.Body).center.x,(enemy.sprite.body as Phaser.Physics.Arcade.Body).center.y,this.swordAngle))this.hurtEnemy(enemy,swordDamage(this.upgrades.swordLevel));}
   }
   const switchKey=!!pad?.buttons[4]?.pressed||touch.weapon;if(just('ONE'))this.equip('slingshot');if(just('TWO'))this.equip('sword');if(just('E')||(switchKey&&!this.switchHeld))this.equip(this.equipped==='sword'?'slingshot':'sword');this.switchHeld=switchKey;
