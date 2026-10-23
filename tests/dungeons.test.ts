@@ -13,7 +13,7 @@ describe('ground-only jump and dungeon entrances',()=>{
 describe('stage encounter and coin progression',()=>{
  it('introduces the same enemy families in main routes and dungeons',()=>{
   const unlocked=[['crawler'],['bat','crawler'],['bat','crawler','husk','slime'],['bat','crawler','husk','slime'],['bat','crawler','husk','slime'],['bat','bloom','crawler','husk','slime']];
-  for(const stages of [STAGES,DUNGEONS])for(const stage of stages)expect([...new Set(stage.enemies.filter(e=>e.kind!=='mindflayer').map(e=>e.kind))].sort()).toEqual(unlocked[Math.min(stage.id-1,5)]);
+  for(const stages of [STAGES,DUNGEONS])for(const stage of stages)expect([...new Set(stage.enemies.filter(e=>e.kind!=='mindflayer'&&e.kind!=='billy').map(e=>e.kind))].sort()).toEqual(unlocked[Math.min(stage.id-1,5)]);
  });
  it('places exactly 1.5 times the previous coins evenly above reachable route platforms',()=>{
   for(const stage of [...STAGES,...DUNGEONS]){

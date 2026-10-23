@@ -4,6 +4,7 @@ export const clampChaseVelocity=(x:number,min:number,max:number,v:number)=>(x<=m
 export const blocksPageScroll=(key:string)=>['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(key);
 export function enemyStats(kind:EnemyKind,stage:number){
  if(kind==='mindflayer')return {hp:15,speed:0,aggro:720,cooldown:5000};
+ if(kind==='billy')return {hp:5,speed:0,aggro:540,cooldown:4000};
  const hp=Math.ceil(({crawler:2,bat:1,husk:3,slime:4,bloom:5}[kind]+Math.floor((stage-1)/3))*1.5);
  return {hp,speed:48+stage*6+(kind==='bat'?20:0),aggro:245+stage*12,cooldown:Math.max(900,2200-stage*110)};
 }

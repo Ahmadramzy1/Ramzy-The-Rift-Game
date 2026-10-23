@@ -1,6 +1,6 @@
 import {loadVolumes} from './progression';
 import {LoopingMusic} from './music';
-export type SoundKind='jump'|'coin'|'stomp'|'hit'|'power'|'win'|'checkpoint'|'shoot'|'psi'|'explosion';
+export type SoundKind='jump'|'coin'|'stomp'|'hit'|'power'|'win'|'checkpoint'|'shoot'|'psi'|'explosion'|'laugh';
 let context:AudioContext|undefined,sfxBus:GainNode|undefined,musicBus:GainNode|undefined;
 let music:LoopingMusic|undefined,loading:Promise<LoopingMusic>|undefined,wanted=false,request=0;
 export const MUSIC_TRACKS=[{title:'Evanescence — Going Under (Remastered)',file:'going-under-remastered.mp3'},{title:'8bit Stranger Things',file:'8bit-stranger-things.mp3'}] as const;
@@ -33,6 +33,9 @@ export function startMusic(restart=false){
 export function stopMusic(){wanted=false;request++;music?.stop();}
 export function playSound(kind:SoundKind){
  try{const c=setup();
+  if(kind==='laugh'){
+   for(let i=0;i<3;i++){const at=c.currentTime+i*.13,o=c.createOscillator(),g=c.createGain();o.type='square';o.frequency.setValueAtTime(350-i*30,at);o.frequency.exponentialRampToValueAtTime(170,at+.09);g.gain.setValueAtTime(.018,at);g.gain.exponentialRampToValueAtTime(.001,at+.1);o.connect(g);g.connect(sfxBus!);o.start(at);o.stop(at+.11);}return;
+  }
   if(kind==='explosion'){
    const length=Math.floor(c.sampleRate*.75),buffer=c.createBuffer(1,length,c.sampleRate),data=buffer.getChannelData(0);
    for(let i=0;i<length;i++)data[i]=(Math.random()*2-1)*(1-i/length);

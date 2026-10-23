@@ -1,5 +1,5 @@
 export type Platform = {x:number;y:number;w:number;kind?:string};
-export type EnemyKind = 'crawler'|'bat'|'slime'|'husk'|'bloom'|'mindflayer';
+export type EnemyKind = 'crawler'|'bat'|'slime'|'husk'|'bloom'|'mindflayer'|'billy';
 export function enemyFamilies(stage:number):EnemyKind[]{
  return stage<2?['crawler']:stage<3?['crawler','bat']:stage<6?['crawler','bat','husk','slime']:['crawler','bat','husk','slime','bloom'];
 }
@@ -48,6 +48,7 @@ export const STAGES:Stage[]=themes.map((t,i)=>{
   const p=platforms[1+(j%4)];enemies.push({x:p.x+90,y:p.y,kind:families[(i+j+2)%families.length],min:p.x+45,max:p.x+p.w-45});
  }
  if(i===2)enemies.push({x:2930,y:458,kind:'mindflayer',min:2850,max:3000});
+ if(i>=1)for(const p of optional.slice(1)){const x=p.x+p.w/2;enemies.push({x,y:p.y,kind:'billy',min:x,max:x});}
  const coins=platforms.flatMap(p=>[.2,.32,.44,.56,.68,.8].map(f=>({x:p.x+p.w*f,y:p.y-92})));
  const decor=platforms.flatMap((p,j)=>[{x:p.x+80,y:p.y,key:i>4?'fence':'wood-fence',size:90},{x:p.x+p.w-70,y:p.y,key:j%2?'streetlamp':'tree',size:j%2?170:155}]);
  const hazards=i<2?[]:[platforms[1],...(i>4?[platforms[2],platforms[4]]:[])].map((p,j)=>({x:p.x+130+j*12,y:p.y,w:28+Math.min(i*3,25)}));

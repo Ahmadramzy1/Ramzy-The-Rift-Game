@@ -8,6 +8,8 @@ import {awardCoin,takeStageLoadout,loadCampaign,recordStageResult,type StageLoad
 import {WEAPONS,projectileInRange,slingshotStats,swordDamage,swordAimInRange,canDoubleJump,DOUBLE_JUMP_COOLDOWN,stageCoinBonus,type WeaponKind} from './weapons';
 import {weaponPose} from './weaponPose';
 import {MIND_FLAYER,waveHitsPlayer,takeWaveHit} from './mindFlayer';
+import {BILLY,billyCanAttack,molotovVelocity} from './billy';
+import {medkitPlacement} from './pickupPlacement';
 
 type Enemy = {index:number;sprite:Phaser.Physics.Arcade.Sprite;min:number;max:number;speed:number;kind:EnemyKind;baseY:number;phase:number;hp:number;maxHp:number;invulnerableUntil:number;aggro:boolean;alertAt:number;lastAttack:number;bar:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;controlledAt:number;liftY:number};
 const propKeys=['grass','stone','forest','metal','rift','floating','metal-platform','rift-platform','bush','rock','barrel','barricade','cone','log','fence','lamp','streetlamp','pole','wood-fence','tree','tower','drain','waterpipe','portal','sign','radio','tape','battery','keycard','heart','coin','mushroom','energy','medkit','key','vial'];
@@ -28,6 +30,7 @@ export class GameScene extends Phaser.Scene {
  loadout:StageLoadout={extraLife:false,extraCharges:0};upgrades=loadCampaign();abilityCharges=1;nextDoubleJumpAt=0;multiplierCollected=false;bonusAwarded=false;swordAngle=0;bonusCoin?:Phaser.Physics.Arcade.Image;
  equipped:WeaponKind='slingshot';swingStarted=-1000;meleeHitDone=true;switchHeld=false;
  shockwaves:{x:number;y:number;origin:number;direction:number;hit:boolean;source:Enemy;art:Phaser.GameObjects.Graphics}[]=[];
+ firePatches:{x:number;y:number;expires:number;art:Phaser.GameObjects.Graphics}[]=[];
 
  constructor(){super('world');}
  preload(){
@@ -41,10 +44,13 @@ export class GameScene extends Phaser.Scene {
   this.load.image('upgrades',base+'upgrade-atlas.png');
   this.load.image('held-weapons',base+'held-weapons.png');
   this.load.image('mindflayer',base+'mind-flayer.png');
+  this.load.image('billy',base+'billy-wheelchair.png');
  }
  create(){
   const bossTexture=this.textures.get('mindflayer'),cuts=[0,575,1094,1636,2172];
   for(let i=0;i<4;i++)bossTexture.add(i,0,cuts[i],0,cuts[i+1]-cuts[i],648);
+  const billyTexture=this.textures.get('billy'),billyCuts=[0,543,1086,1614,2172];
+  for(let i=0;i<4;i++)billyTexture.add(i,0,billyCuts[i],0,billyCuts[i+1]-billyCuts[i],724);
   const spriteAnims:Record<string,{key:string;frames:number[];rate:number}>={
    idle:{key:'hero',frames:[0,0,0,15,0,0],rate:3},walk:{key:'hero',frames:[1,2,3,4],rate:9},run:{key:'hero',frames:[5,6,7],rate:13},
    jump:{key:'hero',frames:[8,9],rate:5},fall:{key:'hero',frames:[10,9],rate:5},hurt:{key:'hero',frames:[12,13],rate:7},
@@ -84,7 +90,7 @@ export class GameScene extends Phaser.Scene {
   this.physics.world.colliders.destroy();
   this.solids?.destroy(true,true);this.bullets?.destroy(true,true);this.hostileShots?.destroy(true,true);this.enemyGroup?.destroy(true,true);
   this.tweens.killAll();this.time.removeAllEvents();this.children.removeAll(true);
-  this.enemies=[];this.motes=[];this.shockwaves=[];this.bonusCoin=undefined;this.stageData=(area==='dungeon'?DUNGEONS:STAGES)[Math.max(0,Math.min(9,index))];this.state=preserveRun?previous:{...initialState(),lives:this.loadout.extraLife?4:3};
+  this.enemies=[];this.motes=[];this.shockwaves=[];this.firePatches=[];this.bonusCoin=undefined;this.stageData=(area==='dungeon'?DUNGEONS:STAGES)[Math.max(0,Math.min(9,index))];this.state=preserveRun?previous:{...initialState(),lives:this.loadout.extraLife?4:3};
   if(preserveRun)this.state.checkpoint=area==='dungeon'?80:this.mainCheckpoint;
   this.status='ready';this.elapsed=preserveRun?previousElapsed:0;this.groundedAt=-10000;this.pressedAt=-10000;this.jumpHeld=false;this.checkpointActive=false;this.resizeBig=false;this.notice='';this.jumpsUsed=0;this.crouching=false;this.lastShot=-1000;this.abilityHeld=false;this.padPauseHeld=false;this.equipped='slingshot';this.swingStarted=-1000;this.meleeHitDone=true;
   this.knockUntil=0;this.previousBottom=0;this.switchHeld=false;
@@ -150,7 +156,8 @@ export class GameScene extends Phaser.Scene {
   for(const [i,c] of stage.tapes.entries())if(!this.mainRadios.has(i))this.pickup('radio',c.x,c.y,39,()=>{this.mainRadios.add(i);this.state.tapes=this.mainRadios.size;this.state.score+=500;this.notify('رادیوی گمشده پیدا شد');sound('power');});
   if(!this.consumedPickups.has(area+'energy'))this.pickup('energy',stage.power.x,stage.power.y,35,()=>{this.consumedPickups.add(area+'energy');this.state.big=true;this.state.score+=300;this.notify('انرژی فعال شد — قهرمان بزرگ شد');sound('power');this.burst(this.player.x,this.player.y,0x7ce4cb,22);});
   // A second power-up after the checkpoint makes later mistakes recoverable.
-  if(!this.consumedPickups.has(area+'medkit'))this.pickup('medkit',stage.checkpoint+180,this.groundY(stage.checkpoint+180)-58,30,()=>{this.consumedPickups.add(area+'medkit');this.state.hearts=Math.min(3,this.state.hearts+1);sound('power');this.notify('سلامتی بازیابی شد');});
+  const medkit=medkitPlacement(stage);
+  if(!this.consumedPickups.has(area+'medkit'))this.pickup('medkit',medkit.x,medkit.y,30,()=>{this.consumedPickups.add(area+'medkit');this.state.hearts=Math.min(3,this.state.hearts+1);sound('power');this.notify('سلامتی بازیابی شد');},undefined,()=>this.state.hearts<3);
   this.bullets=this.physics.add.group({allowGravity:false});this.hostileShots=this.physics.add.group({allowGravity:false});this.enemyGroup=this.physics.add.group({allowGravity:true});
   this.makeCombatTextures();
   this.weapon=this.add.image(110,370,'slingshot').setOrigin(.5,.7).setDepth(12);
@@ -158,26 +165,27 @@ export class GameScene extends Phaser.Scene {
   this.psiBeam=this.add.graphics().setDepth(14);
   for(const [enemyIndex,e] of stage.enemies.entries()){
    if((this.area==='main'?this.mainKills:this.dungeonKills).has(enemyIndex))continue;
-   const flying=e.kind==='bat',boss=e.kind==='mindflayer';
-   const enemy=this.physics.add.sprite(e.x,boss?e.y:e.y-(flying?160:48),e.kind,0).setDepth(8);
+   const flying=e.kind==='bat',boss=e.kind==='mindflayer',billy=e.kind==='billy';
+   const enemy=this.physics.add.sprite(e.x,boss||billy?e.y:e.y-(flying?160:48),e.kind,0).setDepth(8);
    this.enemyGroup.add(enemy);
    if(boss){enemy.setOrigin(.5,636/648).setScale(136/386).setSize(enemy.width*.48,enemy.height*.5).setOffset(enemy.width*.26,636-enemy.height*.5);}
+   else if(billy)enemy.setOrigin(.5,695/724).setScale(80/646).setSize(enemy.width*.62,470).setOffset(enemy.width*.19,225).setImmovable(true);
    else enemy.setScale(flying?.69:.72).setSize(68,48).setOffset(29,56);
-   const body=enemy.body as Phaser.Physics.Arcade.Body;body.setAllowGravity(!flying);
-   if(!boss)enemy.play(e.kind);if(!flying)this.physics.add.collider(enemy,this.solids);
+   const body=enemy.body as Phaser.Physics.Arcade.Body;body.setAllowGravity(!flying&&!billy);
+   if(!boss&&!billy)enemy.play(e.kind);if(!flying&&!billy)this.physics.add.collider(enemy,this.solids);
    const stats=enemyStats(e.kind,stage.id+(this.area==='dungeon'?5:0));
    const bar=this.add.graphics().setDepth(12);const label=this.add.text(enemy.x,enemy.y-56,stats.hp+'/'+stats.hp,{fontFamily:'monospace',fontSize:'9px',color:'#d7dfd9',stroke:'#0c1018',strokeThickness:3}).setOrigin(.5).setDepth(12);
-   this.enemies.push({index:enemyIndex,sprite:enemy,min:e.min,max:e.max,speed:stats.speed,kind:e.kind,baseY:enemy.y,phase:e.x*.02,hp:stats.hp,maxHp:stats.hp,invulnerableUntil:0,aggro:false,alertAt:-10000,lastAttack:boss?this.elapsed:-1000,bar,label,controlledAt:-1,liftY:enemy.y});
+   this.enemies.push({index:enemyIndex,sprite:enemy,min:e.min,max:e.max,speed:stats.speed,kind:e.kind,baseY:enemy.y,phase:e.x*.02,hp:stats.hp,maxHp:stats.hp,invulnerableUntil:0,aggro:false,alertAt:-10000,lastAttack:boss||billy?this.elapsed:-1000,bar,label,controlledAt:-1,liftY:enemy.y});
    this.physics.add.overlap(this.player,enemy,()=>this.encounter(enemy));
   }
   this.physics.add.collider(this.bullets,this.solids,b=>b.destroy());
-  this.physics.add.collider(this.hostileShots,this.solids,b=>b.destroy());
+  this.physics.add.collider(this.hostileShots,this.solids,b=>{const shot=b as Phaser.Physics.Arcade.Image;if(shot.getData('molotov'))this.explodeMolotov(shot);else shot.destroy();});
   this.physics.add.overlap(this.bullets,this.enemyGroup,(bullet,enemy)=>{
    const shot=bullet as Phaser.Physics.Arcade.Image;
    const e=this.enemies.find(e=>e.sprite===enemy);if(!shot.active||!e||e.controlledAt>=0||e.hp<=0)return;
    const damage=shot.getData('damage') as number;shot.destroy();this.hurtEnemy(e,damage,true);
   });
-  this.physics.add.overlap(this.player,this.hostileShots,(_player,shot)=>{if(this.status!=='playing')return;const x=(shot as Phaser.Physics.Arcade.Image).x;shot.destroy();this.damage(x);});
+  this.physics.add.overlap(this.player,this.hostileShots,(_player,obj)=>{const shot=obj as Phaser.Physics.Arcade.Image;if(this.status!=='playing'||!shot.active)return;const x=shot.x;if(shot.getData('molotov'))this.explodeMolotov(shot);else shot.destroy();this.damage(x);});
   this.portal=this.prop('portal',stage.exit,this.groundY(stage.exit),156,6);
   const portalAura=this.add.circle(stage.exit,this.portal.y-76,48,stage.color,.12).setDepth(5);
   this.tweens.add({targets:portalAura,scale:1.35,alpha:.3,duration:1900,yoyo:true,repeat:-1});
@@ -254,6 +262,7 @@ export class GameScene extends Phaser.Scene {
  }
  pop(text:string,x:number,y:number,color=0xf5c76d){const t=this.add.text(x,y,text,{fontFamily:'monospace',fontSize:'15px',color:Phaser.Display.Color.IntegerToColor(color).rgba}).setOrigin(.5).setDepth(25);this.tweens.add({targets:t,y:y-40,alpha:0,duration:1000,onComplete:()=>t.destroy()});}
  makeCombatTextures(){
+  if(!this.textures.exists('molotov')){const g=this.add.graphics();g.fillStyle(0x10261e);g.fillRect(1,5,7,11);g.fillStyle(0x6a985a);g.fillRect(2,6,4,8);g.fillRect(3,2,3,5);g.fillStyle(0xe4c894);g.fillRect(4,0,5,3);g.fillStyle(0xff7929);g.fillTriangle(7,3,8,-5,11,1);g.fillStyle(0xffe49b);g.fillRect(8,-1,2,3);g.generateTexture('molotov',12,18);g.destroy();}
   const atlas=this.textures.get('upgrades');
   if(!atlas.has('steel-blade')){
    // Trim the generated atlas at runtime so the hilt sits in the hero's hand.
@@ -326,6 +335,15 @@ export class GameScene extends Phaser.Scene {
    const t=(this.elapsed-e.controlledAt)/1100;e.sprite.y=e.liftY-110*Math.min(1,t);e.sprite.rotation=Math.sin(t*20)*.06;
    this.psiBeam.lineStyle(2,0xc3a0ed,.7);this.psiBeam.lineBetween(this.player.x,this.player.y-16,e.sprite.x,e.sprite.y);this.psiBeam.lineStyle(1,0xead9ff,.6);this.psiBeam.strokeCircle(e.sprite.x,e.sprite.y,40+Math.sin(t*14)*8);
    if(t>=1.3){this.burst(e.sprite.x,e.sprite.y,0xb998f1,34);this.killEnemy(e);sound('psi');}
+  }else if(e.kind==='billy'){
+   const pb=this.player.body as Phaser.Physics.Arcade.Body,dx=this.player.x-e.sprite.x,near=billyCanAttack(dx,pb.center.y-(e.baseY-40));
+   e.sprite.setVelocity(0).setPosition(e.min,e.baseY).setFlipX(dx>0);
+   if(near&&!e.aggro){e.lastAttack=this.elapsed;e.alertAt=this.elapsed;}
+   e.aggro=near;
+   const cycle=this.elapsed-e.lastAttack;
+   e.sprite.setFrame(near?(cycle>=BILLY.interval-350?2:cycle<270&&e.lastAttack>e.alertAt?3:0):Math.floor(this.elapsed/240)%2);
+   if(near&&cycle>=BILLY.interval){e.lastAttack=this.elapsed;e.sprite.setFrame(3);this.throwMolotov(e);}
+   if(!near&&Math.abs(dx)<750&&this.elapsed-(e.sprite.getData('laughedAt')??-3000)>2400){e.sprite.setData('laughedAt',this.elapsed);this.pop('HA HA',e.sprite.x,e.baseY-90,0xe2c99e);sound('laugh');}
   }else if(e.kind==='mindflayer'){
    const cycle=this.elapsed-e.lastAttack,windup=cycle>=MIND_FLAYER.interval-MIND_FLAYER.windup;
    e.sprite.setVelocityX(0).setFlipX(this.player.x>e.sprite.x);e.aggro=Math.abs(this.player.x-e.sprite.x)<720;
@@ -360,9 +378,30 @@ export class GameScene extends Phaser.Scene {
    }
    if(eb.blocked.left||eb.blocked.right)e.speed=-e.speed;
   }
-  const barY=e.sprite.y-(e.kind==='mindflayer'?(Number(e.sprite.frame.name)===2?202:146):45),barWidth=e.kind==='mindflayer'?90:48;
+  const barY=e.sprite.y-(e.kind==='mindflayer'?(Number(e.sprite.frame.name)===2?202:146):e.kind==='billy'?90:45),barWidth=e.kind==='mindflayer'?90:48;
   e.bar.clear();e.bar.fillStyle(0x09111d,.95);e.bar.fillRect(e.sprite.x-barWidth/2,barY,barWidth,7);e.bar.fillStyle(e.controlledAt>=0?0xb399ed:e.aggro?0xeb6972:0x8bc9b1);e.bar.fillRect(e.sprite.x-barWidth/2+1,barY+1,(barWidth-2)*e.hp/e.maxHp,5);
-  e.label.setPosition(e.sprite.x,barY-8).setText((e.kind==='mindflayer'?'MIND FLAYER ':e.aggro?'! ':'')+e.hp+'/'+e.maxHp);
+  e.label.setPosition(e.sprite.x,barY-8).setText((e.kind==='mindflayer'?'MIND FLAYER ':e.kind==='billy'?'BILLY ':e.aggro?'! ':'')+e.hp+'/'+e.maxHp);
+ }
+ throwMolotov(enemy:Enemy){
+  const target=this.player.body as Phaser.Physics.Arcade.Body,direction=this.player.x<enemy.sprite.x?-1:1;
+  const x=enemy.sprite.x+direction*20,y=enemy.baseY-68,velocity=molotovVelocity(x,y,target.center.x,target.center.y);
+  const shot=this.physics.add.image(x,y,'molotov').setDepth(13);this.hostileShots.add(shot);
+  (shot.body as Phaser.Physics.Arcade.Body).setAllowGravity(true).setGravityY(BILLY.gravity-PHYSICS.gravity);
+  shot.setVelocity(velocity.x,velocity.y).setAngularVelocity(direction*240).setData('molotov',true).setData('expires',this.elapsed+2500);sound('shoot');
+ }
+ explodeMolotov(shot:Phaser.Physics.Arcade.Image){
+  if(!shot.active)return;const x=shot.x,y=shot.y;shot.destroy();this.burst(x,y,0xff8a3d,12);sound('hit');
+  const surfaces=[...this.stageData.platforms,...this.stageData.ceilings].filter(p=>x>=p.x&&x<=p.x+p.w&&p.y>=y-30).sort((a,b)=>a.y-b.y);
+  const surface=surfaces[0];if(surface)this.firePatches.push({x,y:surface.y,expires:this.elapsed+BILLY.fireDuration,art:this.add.graphics().setDepth(9)});
+ }
+ updateFire(){
+  const body=this.player.body as Phaser.Physics.Arcade.Body;
+  this.firePatches=this.firePatches.filter(f=>{
+   if(this.elapsed>=f.expires){f.art.destroy();return false;}
+   f.art.clear();for(let i=0;i<6;i++){const x=f.x-25+i*10,h=10+Math.sin(this.elapsed*.025+i)*4;f.art.fillStyle(i%2?0xffad42:0xf35b35,.85);f.art.fillTriangle(x-5,f.y,x,f.y-h,x+5,f.y);}
+   if(body.right>f.x-28&&body.left<f.x+28&&body.bottom>=f.y-12&&body.top<f.y+6)this.damage(f.x);
+   return true;
+  });
  }
  slamGround(enemy:Enemy){
   const y=this.groundY(enemy.sprite.x);this.burst(enemy.sprite.x,y,0xff5d59,22);
@@ -389,7 +428,7 @@ export class GameScene extends Phaser.Scene {
   }else this.damage(enemy.x);
  }
  damage(fromX:number,hearts=1){
-  if(this.elapsed<this.state.invincibleUntil)return;
+  if(this.status!=='playing'||this.elapsed<this.state.invincibleUntil)return;
   this.state=hearts===MIND_FLAYER.damage?takeWaveHit(this.state,this.elapsed):takeHit(this.state,this.elapsed);sound('hit');this.burst(this.player.x,this.player.y,0xdc5863,12);
   if(!settings.reducedMotion)this.cameras.main.shake(130,.003);
   this.knockUntil=this.elapsed+220;this.player.setVelocity(this.player.x<fromX?-180:180,-230);
@@ -457,7 +496,7 @@ export class GameScene extends Phaser.Scene {
   if(big)anim='big'+anim;
   if(this.crouching){this.player.anims.stop();this.player.setFrame(11);}else this.player.play(anim,true);
   this.player.setScale(1);this.player.setAlpha(this.elapsed<this.state.invincibleUntil?.5+Math.sin(this.sceneTime*.014)*.2:1);
-  this.psiBeam.clear();for(const enemy of this.enemies)this.enemyBrain(enemy,dt);this.updateShockwaves(dt,supported);
+  this.psiBeam.clear();for(const enemy of this.enemies)this.enemyBrain(enemy,dt);this.updateShockwaves(dt,supported);if(this.status==='playing')this.updateFire();
   if(this.status!=='playing')return;
   for(const group of [this.bullets,this.hostileShots])for(const obj of [...group.getChildren()]){
    const bullet=obj as Phaser.Physics.Arcade.Image;

@@ -4,6 +4,7 @@ import {settings,touch} from '../src/game/bridge';
 import {CAMPAIGN_KEY,loadCampaign,awardCoin,buyItem} from '../src/game/campaign';
 import {command} from '../src/game/bridge';
 import {STAGES} from '../src/game/levels';
+import {medkitPlacement} from '../src/game/pickupPlacement';
 const scene=new GameScene();settings.sound=false;
 const game=new Phaser.Game({type:Phaser.CANVAS,parent:'game',width:1920,height:1080,scene:[scene],physics:{default:'arcade',arcade:{gravity:{x:0,y:1500},fps:60,fixedStep:true}},audio:{noAudio:true},pixelArt:true});
 const output=document.getElementById('results')!;
@@ -20,6 +21,11 @@ for(const [label,time] of [['Preview Mind Flayer',2000],['Preview boss windup',4
  };
 }
 function assert(ok:unknown,message:string){if(!ok)throw new Error(message);}
+for(const [label,throwing] of [['Preview Billy laugh',false],['Preview Billy throw',true]] as const){
+ const button=document.createElement('button');button.textContent=label;output.before(button);button.onclick=async()=>{
+  await fresh(1);const b=scene.enemies.find(e=>e.kind==='billy')!;scene.enemies.filter(e=>e!==b).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});scene.player.setPosition(b.sprite.x-(throwing?150:600),scene.groundY(b.sprite.x-(throwing?150:600))-48);scene.player.setVelocity(0);await frames(4);if(throwing){b.lastAttack=scene.elapsed-3990;await frames(6);}scene.cameras.main.stopFollow().setZoom(4).centerOn(b.sprite.x-35,b.baseY-25);scene.pause();
+ };
+}
 const frames=(count:number)=>new Promise<void>(resolve=>{let n=0;const tick=()=>{if(++n>=count){game.events.off('poststep',tick);resolve();}};game.events.on('poststep',tick);});
 function release(){for(const key of Object.values(scene.keys))key.isDown=false;for(const key of Object.keys(touch) as (keyof typeof touch)[])touch[key]=false;}
 async function fresh(id=0){release();scene.loadStage(id);scene.startPlay();await frames(15);}
@@ -30,7 +36,8 @@ document.getElementById('run')!.onclick=async()=>{
  if(upgradeOnly){localStorage.removeItem(CAMPAIGN_KEY);localStorage.removeItem('ramzy-v2-progress');}
  const weaponsOnly=new URLSearchParams(location.search).has('weaponsOnly');
  const bossOnly=new URLSearchParams(location.search).has('bossOnly');
- const test=async(name:string,fn:()=>Promise<void>)=>{if(bossOnly&&!name.startsWith('boss:'))return;if(upgradeOnly&&!name.startsWith('upgrade:'))return;if(weaponsOnly&&!/upgrade: purchased|upgrade: two fire/.test(name))return;if(new URLSearchParams(location.search).has('dungeonOnly')&&!/dungeon|wallet|collectibles/.test(name))return;try{await fn();passed++;report('PASS '+name);}catch(e){report('FAIL '+name+' — '+String(e));throw e;}};
+ const billyOnly=new URLSearchParams(location.search).has('billyOnly');
+ const test=async(name:string,fn:()=>Promise<void>)=>{if(billyOnly&&!/^(billy|medkit):/.test(name))return;if(bossOnly&&!name.startsWith('boss:'))return;if(upgradeOnly&&!name.startsWith('upgrade:'))return;if(weaponsOnly&&!/upgrade: purchased|upgrade: two fire/.test(name))return;if(new URLSearchParams(location.search).has('dungeonOnly')&&!/dungeon|wallet|collectibles/.test(name))return;try{await fn();passed++;report('PASS '+name);}catch(e){report('FAIL '+name+' — '+String(e));throw e;}};
  try{
   await test('ground, acceleration and feet-preserving crouch',async()=>{
    await fresh();const b=scene.player.body as Phaser.Physics.Arcade.Body;assert(b.blocked.down,'spawn must stand on ground');
@@ -124,7 +131,20 @@ document.getElementById('run')!.onclick=async()=>{
    scene.shockwaves.forEach(w=>w.art.destroy());scene.shockwaves=[];scene.player.setPosition(2830,410);scene.player.setVelocity(0);scene.state.hearts=3;scene.state.invincibleUntil=0;await frames(7);touch.jump=true;await frames(3);boss.lastAttack=scene.elapsed-5000;await frames(30);touch.jump=false;assert(scene.state.hearts===3,'jump avoids actual moving wave');
    scene.hurtEnemy(boss,15,true);await frames(2);assert(!boss.sprite.active&&scene.shockwaves.length===0,'defeat cancels remaining shockwaves');
   });
-  const expected=bossOnly?1:weaponsOnly?2:upgradeOnly?4:new URLSearchParams(location.search).has('dungeonOnly')?4:20;report('RESULT: '+passed+'/'+expected+' engine checks passed.');document.title='PASS '+passed+'/'+expected+' — RAMZY';
+  await test('billy: stationary laugh, four-second throw cycle and gravity-driven molotov',async()=>{
+   await fresh(1);const b=scene.enemies.find(e=>e.kind==='billy')!,originalX=b.sprite.x;assert(b.hp===5,'five HP');
+   scene.enemies.filter(e=>e!==b).forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});assert(!b.aggro&&Number(b.sprite.frame.name)<2,'idle laughing animation');
+   scene.player.setPosition(originalX-150,scene.groundY(originalX-150)-48);scene.player.setVelocity(0);scene.state.invincibleUntil=Infinity;await frames(5);b.lastAttack=scene.elapsed;
+   scene.elapsed=b.lastAttack+3700;await frames(2);assert(Number(b.sprite.frame.name)===2,'bottle raised before throw');assert(scene.hostileShots.getLength()===0,'no shot before four seconds');scene.elapsed=b.lastAttack+3990;await frames(2);
+   const shot=scene.hostileShots.getChildren()[0] as Phaser.Physics.Arcade.Image;assert(shot?.getData('molotov'),'throws real bottle');const velocity=shot.body!.velocity.y;assert(velocity<0&&(shot.body as Phaser.Physics.Arcade.Body).allowGravity,'bottle launches upward on gravity arc');await frames(14);assert(shot.body!.velocity.y>velocity,'gravity bends trajectory');
+   const previous=b.lastAttack;scene.elapsed=previous+3990;await frames(2);assert(b.lastAttack>=previous+4000,'next throw after four seconds');assert(b.sprite.x===originalX&&b.sprite.body!.velocity.x===0,'wheelchair never chases');
+   const bottle=scene.hostileShots.getChildren().find(o=>(o as Phaser.Physics.Arcade.Image).getData('molotov')) as Phaser.Physics.Arcade.Image;assert(!!bottle,'second bottle exists');bottle.setPosition(originalX, b.baseY-2);scene.explodeMolotov(bottle);assert(scene.firePatches.length>0,'impact produces temporary ground fire');
+   scene.player.setPosition(110,410);await frames(3);assert(!b.aggro&&Number(b.sprite.frame.name)<2,'returns to laugh when hero leaves');
+  });
+  await test('medkit: pickup above floating platform restores HP and waits when health is full',async()=>{
+   await fresh();scene.enemies.forEach(e=>{e.sprite.disableBody(true,true);e.bar.clear();e.label.setVisible(false);});const p=medkitPlacement(scene.stageData);scene.player.setPosition(p.x,p.y+10);scene.player.setVelocity(0);scene.state.hearts=3;await frames(6);assert(!scene.consumedPickups.has('mainmedkit'),'full health does not waste medkit');scene.state.hearts=2;await frames(5);assert(scene.state.hearts===3&&scene.consumedPickups.has('mainmedkit'),'standing on floating platform collects and heals');
+  });
+  const expected=billyOnly?2:bossOnly?1:weaponsOnly?2:upgradeOnly?4:new URLSearchParams(location.search).has('dungeonOnly')?4:22;report('RESULT: '+passed+'/'+expected+' engine checks passed.');document.title='PASS '+passed+'/'+expected+' — RAMZY';
  }catch(e){release();scene.pause();report('RESULT: stopped after '+passed+' passed. '+String(e));document.title='FAIL — Signal 86';}
  finally{if(upgradeOnly){if(savedCampaign===null)localStorage.removeItem(CAMPAIGN_KEY);else localStorage.setItem(CAMPAIGN_KEY,savedCampaign);if(savedLegacy===null)localStorage.removeItem('ramzy-v2-progress');else localStorage.setItem('ramzy-v2-progress',savedLegacy);}}
 };
